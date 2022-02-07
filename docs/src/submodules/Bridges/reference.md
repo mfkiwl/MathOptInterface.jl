@@ -25,26 +25,45 @@ Bridges.add_bridge
 Bridges.remove_bridge
 Bridges.has_bridge
 Bridges.full_bridge_optimizer
+Bridges.ListOfNonstandardBridges
 Bridges.debug_supports_constraint
 Bridges.debug_supports
 Bridges.bridged_variable_function
 Bridges.unbridged_variable_function
+Bridges.bridged_function
+Bridges.Variable.unbridged_map
 ```
 
 ## Constraint bridges
 
 ```@docs
 Bridges.Constraint.AbstractBridge
+Bridges.Constraint.AbstractFunctionConversionBridge
 Bridges.Constraint.SingleBridgeOptimizer
 Bridges.Constraint.add_all_bridges
+```
+
+### [SetMap bridges](@id constraint_set_map)
+
+```@docs
+Bridges.Variable.SetMapBridge
+Bridges.Constraint.SetMapBridge
+Bridges.map_set
+Bridges.inverse_map_set
+Bridges.map_function
+Bridges.inverse_map_function
+Bridges.adjoint_map_function
+Bridges.inverse_adjoint_map_function
 ```
 
 ### [Bridges implemented](@id constraint_bridges_ref)
 
 ```@docs
+Bridges.Constraint.FlipSignBridge
+Bridges.Constraint.AbstractToIntervalBridge
 Bridges.Constraint.GreaterToIntervalBridge
-Bridges.Constraint.GreaterToLessBridge
 Bridges.Constraint.LessToIntervalBridge
+Bridges.Constraint.GreaterToLessBridge
 Bridges.Constraint.LessToGreaterBridge
 Bridges.Constraint.NonnegToNonposBridge
 Bridges.Constraint.NonposToNonnegBridge
@@ -89,6 +108,7 @@ Bridges.Variable.add_all_bridges
 ### [Bridges implemented](@id variable_bridges_ref)
 
 ```@docs
+Bridges.Variable.FlipSignBridge
 Bridges.Variable.ZerosBridge
 Bridges.Variable.FreeBridge
 Bridges.Variable.NonposToNonnegBridge

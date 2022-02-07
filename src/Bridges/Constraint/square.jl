@@ -143,13 +143,13 @@ function MOI.supports_constraint(
 end
 
 function MOIB.added_constrained_variable_types(::Type{<:SquareBridge})
-    return Tuple{DataType}[]
+    return Tuple{Type}[]
 end
 
 function MOIB.added_constraint_types(
     ::Type{SquareBridge{T,F,G,TT,ST}},
 ) where {T,F,G,TT,ST}
-    return [(F, TT), (G, MOI.EqualTo{T})]
+    return Tuple{Type,Type}[(F, TT), (G, MOI.EqualTo{T})]
 end
 
 function concrete_bridge_type(
@@ -167,14 +167,14 @@ end
 function MOI.get(
     ::SquareBridge{T,F,G,TT},
     ::MOI.NumberOfConstraints{F,TT},
-) where {T,F,G,TT}
+)::Int64 where {T,F,G,TT}
     return 1
 end
 
 function MOI.get(
     bridge::SquareBridge{T,F,G},
     ::MOI.NumberOfConstraints{G,MOI.EqualTo{T}},
-) where {T,F,G}
+)::Int64 where {T,F,G}
     return length(bridge.sym)
 end
 

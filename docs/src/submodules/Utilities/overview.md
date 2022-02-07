@@ -21,7 +21,7 @@ given the extensibility of MOI, this might not cover all use cases.
 Create a model as follows:
 ```jldoctest
 julia> model = MOI.Utilities.Model{Float64}()
-MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
+MOIU.Model{Float64}
 ```
 
 ## Utilities.UniversalFallback
@@ -36,8 +36,8 @@ like [`VariablePrimalStart`](@ref), so JuMP uses a combination of Universal
 fallback and [`Utilities.Model`](@ref) as a generic problem cache:
 ```jldoctest
 julia> model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}())
-MOIU.UniversalFallback{MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}}
-fallback for MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
+MOIU.UniversalFallback{MOIU.Model{Float64}}
+fallback for MOIU.Model{Float64}
 ```
 
 !!! warning
@@ -53,7 +53,7 @@ defined outside of MOI (but still known at compile time), we provide the
 
 The `@model` macro takes a name (for a new type, which must not exist yet),
 eight tuples specifying the types of constraints that are supported, and then a
-`Bool` indicating the type should be a subtype of `MOI.AbstractOptimizer` (if
+`Bool` indicating the type is a subtype of `MOI.AbstractOptimizer` (if
 `true`) or `MOI.ModelLike` (if `false`).
 
 The eight tuples are in the following order:
@@ -61,12 +61,12 @@ The eight tuples are in the following order:
  2. Typed scalar sets, e.g., [`LessThan`](@ref)
  3. Un-typed vector sets, e.g., [`Nonnegatives`](@ref)
  4. Typed vector sets, e.g., [`PowerCone`](@ref)
- 5. Un-typed scalar functions, e.g., [`SingleVariable`](@ref)
+ 5. Un-typed scalar functions, e.g., [`VariableIndex`](@ref)
  6. Typed scalar functions, e.g., [`ScalarAffineFunction`](@ref)
  7. Un-typed vector functions, e.g., [`VectorOfVariables`](@ref)
  8. Typed vector functions, e.g., [`VectorAffineFunction`](@ref)
 
-The tuples can contain more than one element. Typed-sets should be speficied
+The tuples can contain more than one element. Typed-sets must be specified
 without their type parameter, i.e., `MOI.LessThan`, not `MOI.LessThan{Float64}`.
 
 Here is an example:
@@ -77,21 +77,21 @@ julia> MOI.Utilities.@model(
            (MOI.GreaterThan,),              # Typed scalar sets
            (MOI.Nonnegatives,),             # Un-typed vector sets
            (MOI.PowerCone,),                # Typed vector sets
-           (MOI.SingleVariable,),           # Un-typed scalar functions
+           (MOI.VariableIndex,),            # Un-typed scalar functions
            (MOI.ScalarAffineFunction,),     # Typed scalar functions
            (MOI.VectorOfVariables,),        # Un-typed vector functions
            (MOI.VectorAffineFunction,),     # Typed vector functions
            true,                            # <:MOI.AbstractOptimizer?
        )
-MathOptInterface.Utilities.GenericOptimizer{T,MyNewModelFunctionConstraints{T}} where T
+MathOptInterface.Utilities.GenericOptimizer{T, MathOptInterface.Utilities.ObjectiveContainer{T}, MathOptInterface.Utilities.VariablesContainer{T}, MyNewModelFunctionConstraints{T}} where T
 
 julia> model = MyNewModel{Float64}()
-MOIU.GenericOptimizer{Float64,MyNewModelFunctionConstraints{Float64}}
+MOIU.GenericOptimizer{Float64, MOIU.ObjectiveContainer{Float64}, MOIU.VariablesContainer{Float64}, MyNewModelFunctionConstraints{Float64}}
 ```
 
 !!! warning
-    `MyNewModel` supports every `SingleVariable`-in-Set constraint, as well as
-    [`SingleVariable`](@ref), [`ScalarAffineFunction`](@ref), and
+    `MyNewModel` supports every `VariableIndex`-in-Set constraint, as well as
+    [`VariableIndex`](@ref), [`ScalarAffineFunction`](@ref), and
     [`ScalarQuadraticFunction`](@ref) objective functions. Implement
     `MOI.supports` as needed to forbid constraint and objective function
     combinations.
@@ -112,14 +112,14 @@ julia> MOI.Utilities.@model(
            (MOI.VectorAffineFunction,),  # Typed vector functions
            true,  # is_optimizer
        )
-MathOptInterface.Utilities.GenericOptimizer{T,MathOptInterface.Utilities.VectorOfConstraints{MathOptInterface.VectorAffineFunction{T},MathOptInterface.Complements}} where T
+MathOptInterface.Utilities.GenericOptimizer{T, MathOptInterface.Utilities.ObjectiveContainer{T}, MathOptInterface.Utilities.VariablesContainer{T}, MathOptInterface.Utilities.VectorOfConstraints{MathOptInterface.VectorAffineFunction{T}, MathOptInterface.Complements}} where T
 ```
-However, `PathOptimizer` does not support some `SingleVariable`-in-Set
+However, `PathOptimizer` does not support some `VariableIndex`-in-Set
 constraints, so we must explicitly define:
 ```jldoctest pathoptimizer
 julia> function MOI.supports_constraint(
            ::PathOptimizer,
-           ::Type{MOI.SingleVariable},
+           ::Type{MOI.VariableIndex},
            ::Type{Union{<:MOI.Semiinteger,MOI.Semicontinuous,MOI.ZeroOne,MOI.Integer}}
        )
            return false
@@ -152,11 +152,11 @@ julia> model = MOI.Utilities.CachingOptimizer(
            MOI.Utilities.Model{Float64}(),
            PathOptimizer{Float64}(),
        )
-MOIU.CachingOptimizer{MOIU.GenericOptimizer{Float64,MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64},MOI.Complements}},MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}}
+MOIU.CachingOptimizer{MOIU.GenericOptimizer{Float64, MOIU.ObjectiveContainer{Float64}, MOIU.VariablesContainer{Float64}, MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64}, MOI.Complements}}, MOIU.Model{Float64}}
 in state EMPTY_OPTIMIZER
 in mode AUTOMATIC
-with model cache MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
-with optimizer MOIU.GenericOptimizer{Float64,MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64},MOI.Complements}}
+with model cache MOIU.Model{Float64}
+with optimizer MOIU.GenericOptimizer{Float64, MOIU.ObjectiveContainer{Float64}, MOIU.VariablesContainer{Float64}, MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64}, MOI.Complements}}
 ```
 
 A [`Utilities.CachingOptimizer`](@ref) may be in one of three possible states:
@@ -176,11 +176,11 @@ Use [`Utilities.attach_optimizer`](@ref) to go from `EMPTY_OPTIMIZER` to
 julia> MOI.Utilities.attach_optimizer(model)
 
 julia> model
-MOIU.CachingOptimizer{MOIU.GenericOptimizer{Float64,MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64},MOI.Complements}},MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}}
+MOIU.CachingOptimizer{MOIU.GenericOptimizer{Float64, MOIU.ObjectiveContainer{Float64}, MOIU.VariablesContainer{Float64}, MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64}, MOI.Complements}}, MOIU.Model{Float64}}
 in state ATTACHED_OPTIMIZER
 in mode AUTOMATIC
-with model cache MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
-with optimizer MOIU.GenericOptimizer{Float64,MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64},MOI.Complements}}
+with model cache MOIU.Model{Float64}
+with optimizer MOIU.GenericOptimizer{Float64, MOIU.ObjectiveContainer{Float64}, MOIU.VariablesContainer{Float64}, MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64}, MOI.Complements}}
 ```
 
 !!! info
@@ -192,22 +192,27 @@ Use [`Utilities.reset_optimizer`](@ref) to go from `ATTACHED_OPTIMIZER` to
 julia> MOI.Utilities.reset_optimizer(model)
 
 julia> model
-MOIU.CachingOptimizer{MOIU.GenericOptimizer{Float64,MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64},MOI.Complements}},MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}}
+MOIU.CachingOptimizer{MOIU.GenericOptimizer{Float64, MOIU.ObjectiveContainer{Float64}, MOIU.VariablesContainer{Float64}, MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64}, MOI.Complements}}, MOIU.Model{Float64}}
 in state EMPTY_OPTIMIZER
 in mode AUTOMATIC
-with model cache MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
-with optimizer MOIU.GenericOptimizer{Float64,MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64},MOI.Complements}}
+with model cache MOIU.Model{Float64}
+with optimizer MOIU.GenericOptimizer{Float64, MOIU.ObjectiveContainer{Float64}, MOIU.VariablesContainer{Float64}, MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64}, MOI.Complements}}
 ```
+
+!!! info
+    Calling `MOI.empty!(model)` also resets the state to `EMPTY_OPTIMIZER`.
+    So after emptying a model, the modification will only be applied to the
+    cache.
 
 Use [`Utilities.drop_optimizer`](@ref) to go from any state to `NO_OPTIMIZER`:
 ```jldoctest pathoptimizer
 julia> MOI.Utilities.drop_optimizer(model)
 
 julia> model
-MOIU.CachingOptimizer{MOIU.GenericOptimizer{Float64,MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64},MOI.Complements}},MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}}
+MOIU.CachingOptimizer{MOIU.GenericOptimizer{Float64, MOIU.ObjectiveContainer{Float64}, MOIU.VariablesContainer{Float64}, MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64}, MOI.Complements}}, MOIU.Model{Float64}}
 in state NO_OPTIMIZER
 in mode AUTOMATIC
-with model cache MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
+with model cache MOIU.Model{Float64}
 with optimizer nothing
 ```
 
@@ -217,11 +222,11 @@ Pass an empty optimizer to [`Utilities.reset_optimizer`](@ref) to go from
 julia> MOI.Utilities.reset_optimizer(model, PathOptimizer{Float64}())
 
 julia> model
-MOIU.CachingOptimizer{MOIU.GenericOptimizer{Float64,MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64},MOI.Complements}},MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}}
+MOIU.CachingOptimizer{MOIU.GenericOptimizer{Float64, MOIU.ObjectiveContainer{Float64}, MOIU.VariablesContainer{Float64}, MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64}, MOI.Complements}}, MOIU.Model{Float64}}
 in state EMPTY_OPTIMIZER
 in mode AUTOMATIC
-with model cache MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
-with optimizer MOIU.GenericOptimizer{Float64,MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64},MOI.Complements}}
+with model cache MOIU.Model{Float64}
+with optimizer MOIU.GenericOptimizer{Float64, MOIU.ObjectiveContainer{Float64}, MOIU.VariablesContainer{Float64}, MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64}, MOI.Complements}}
 ```
 
 Deciding when to attach and reset the optimizer is tedious, and you will often
@@ -251,20 +256,20 @@ julia> model = MOI.Utilities.CachingOptimizer(
            MOI.Utilities.Model{Float64}(),
            MOI.Utilities.MANUAL,
        )
-MOIU.CachingOptimizer{MOI.AbstractOptimizer,MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}}
+MOIU.CachingOptimizer{MOI.AbstractOptimizer, MOIU.Model{Float64}}
 in state NO_OPTIMIZER
 in mode MANUAL
-with model cache MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
+with model cache MOIU.Model{Float64}
 with optimizer nothing
 
 julia> MOI.Utilities.reset_optimizer(model, PathOptimizer{Float64}())
 
 julia> model
-MOIU.CachingOptimizer{MOI.AbstractOptimizer,MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}}
+MOIU.CachingOptimizer{MOI.AbstractOptimizer, MOIU.Model{Float64}}
 in state EMPTY_OPTIMIZER
 in mode MANUAL
-with model cache MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
-with optimizer MOIU.GenericOptimizer{Float64,MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64},MOI.Complements}}
+with model cache MOIU.Model{Float64}
+with optimizer MOIU.GenericOptimizer{Float64, MOIU.ObjectiveContainer{Float64}, MOIU.VariablesContainer{Float64}, MOIU.VectorOfConstraints{MOI.VectorAffineFunction{Float64}, MOI.Complements}}
 ```
 
 ## Printing
@@ -278,110 +283,37 @@ MathOptInterface.VariableIndex(1)
 
 julia> MOI.set(model, MOI.VariableName(), x, "x_var")
 
-julia> f = MOI.SingleVariable(x)
-MathOptInterface.SingleVariable(MathOptInterface.VariableIndex(1))
+julia> MOI.add_constraint(model, x, MOI.ZeroOne())
+MathOptInterface.ConstraintIndex{MathOptInterface.VariableIndex, MathOptInterface.ZeroOne}(1)
 
-julia> MOI.add_constraint(model, f, MOI.ZeroOne())
-MathOptInterface.ConstraintIndex{MathOptInterface.SingleVariable,MathOptInterface.ZeroOne}(1)
-
-julia> MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
+julia> MOI.set(model, MOI.ObjectiveFunction{typeof(x)}(), x)
 
 julia> MOI.set(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
 
 julia> print(model)
-Maximize SingleVariable:
+Maximize VariableIndex:
  x_var
 
 Subject to:
 
-SingleVariable-in-ZeroOne
+VariableIndex-in-ZeroOne
  x_var ∈ {0, 1}
 ```
 
-Use [`Utilities.latex_formulation`](@Ref) to display the model in LaTeX form:
+Use [`Utilities.latex_formulation`](@ref) to display the model in LaTeX form:
 ```jldoctest utilities_print
 julia> MOI.Utilities.latex_formulation(model)
 $$ \begin{aligned}
 \max\quad & x\_var \\
 \text{Subject to}\\
- & \text{SingleVariable-in-ZeroOne} \\
+ & \text{VariableIndex-in-ZeroOne} \\
  & x\_var \in \{0, 1\} \\
 \end{aligned} $$
 ```
 
 !!! tip
     In IJulia, calling `print` or ending a cell with
-    [`Utilities.latex_formulation`](@ref) will render the model in LaTex.
-
-## Allocate-Load
-
-The Allocate-Load API allows solvers that do not support loading the problem
-incrementally to implement [`copy_to`](@ref) in a way that still allows
-transformations to be applied in the copy between the cache and the
-model if the transformations are implemented as MOI layers implementing the
-Allocate-Load API.
-
-Loading a model using the Allocate-Load interface consists of two passes
-through the model data:
-1) the _allocate_ pass where the model typically records the necessary
-   information about the constraints and attributes such as their number and
-   size. This information may be used by the solver to allocate datastructures
-   of appropriate size.
-2) the _load_ pass where the model typically loads the constraint and attribute
-   data to the model.
-
-The description above only gives a suggestion of what to achieve in each pass.
-In fact the exact same constraint and attribute data is provided to each pass,
-so an implementation of the Allocate-Load API is free to do whatever is more
-convenient in each pass.
-
-The main difference between each pass, apart from the fact that one is executed
-before the other during a copy, is that the allocate pass needs to create and
-return new variable and constraint indices, while during the load pass the
-appropriate constraint indices are provided.
-
-If you choose to implement the Allocate-Load API, implement the following
-functions, which will be called in order:
-
-**Allocate**
-
- * [`Utilities.allocate_variables`](@ref)
- * [`Utilities.allocate_constrained_variable`](@ref)
- * [`Utilities.allocate_constrained_variables`](@ref)
- * [`Utilities.allocate`](@ref)
- * [`Utilities.allocate_constraint`](@ref)
-
-**Load**
-
- * [`Utilities.load_variables`](@ref)
- * [`Utilities.load_constrained_variable`](@ref)
- * [`Utilities.load_constrained_variables`](@ref)
- * [`Utilities.load`](@ref)
- * [`Utilities.load_constraint`](@ref)
-
-Note that the `_constrained_variable` functions are optional, and are only
-needed if the solver requires variables be constrained on creation.
-
-You must also implement:
-```julia
-function MOI.copy_to(dest::Optimizer, src::MOI.ModelLike; kwargs...)
-    return MOI.Utilities.automatic_copy_to(dest, src; kwargs...)
-end
-
-function MOI.Utilities.supports_allocate_load(
-    model::Optimizer,
-    copy_names::Bool,
-)
-    # If you support names...
-    return true
-    # Otherwise...
-    return !copy_names
-end
-```
-See [`Utilities.supports_allocate_load`](@ref) for more details.
-
-!!! warning
-    The Allocate-Load API should **not** be used outside [`copy_to`](@ref).
+    [`Utilities.latex_formulation`](@ref) will render the model in LaTeX.
 
 ## Utilities.MatrixOfConstraints
 
@@ -389,7 +321,7 @@ The constraints of [`Utilities.Model`](@ref) are stored as a vector of tuples
 of function and set in a `Utilities.VectorOfConstraints`. Other representations
 can be used by parametrizing the type [`Utilities.GenericModel`](@ref)
 (resp. [`Utilities.GenericOptimizer`](@ref)). For instance, if all
-non-`SingleVariable` constraints are affine, the coefficients of all the
+non-`VariableIndex` constraints are affine, the coefficients of all the
 constraints can be stored in a single sparse matrix using
 [`Utilities.MatrixOfConstraints`](@ref). The constraints storage can even be
 customized up to a point where it exactly matches the storage of the solver of
@@ -405,7 +337,7 @@ const Model = MOI.Utilities.GenericModel{
     MOI.Utilities.MatrixOfConstraints{
         Float64,
         MOI.Utilities.MutableSparseMatrixCSC{Float64,Cint,MOI.Utilities.ZeroBasedIndexing},
-        MOI.Utilities.Box{Float64},
+        MOI.Utilities.Hyperrectangle{Float64},
         LP{Float64},
     },
 }
@@ -415,10 +347,7 @@ The [`copy_to`](@ref) operation can now be implemented as follows (assuming that
 the `Model` definition above is in the `Clp` module so that it can be referred
 to as `Model`, to be distinguished with [`Utilities.Model`](@ref)):
 ```julia
-function _copy_to(
-    dest::Optimizer,
-    src::Model
-)
+function _copy_to(dest::Optimizer, src::Model)
     @assert MOI.is_empty(dest)
     A = src.constraints.coefficients
     row_bounds = src.constraints.constants
@@ -439,19 +368,14 @@ function _copy_to(
     return
 end
 
-function MOI.copy_to(
-    dest::Optimizer,
-    src::Model;
-    copy_names::Bool = false
-)
+function MOI.copy_to(dest::Optimizer, src::Model)
     _copy_to(dest, src)
     return MOI.Utilities.identity_index_map(src)
 end
 
 function MOI.copy_to(
     dest::Optimizer,
-    src::MOI.Utilities.UniversalFallback{Model};
-    copy_names::Bool = false
+    src::MOI.Utilities.UniversalFallback{Model},
 )
     # Copy attributes from `src` to `dest` and error in case any unsupported
     # constraints or attributes are set in `UniversalFallback`.
@@ -460,14 +384,29 @@ end
 
 function MOI.copy_to(
     dest::Optimizer,
-    src::MOI.ModelLike;
-    copy_names::Bool = false
+    src::MOI.ModelLike,
 )
     model = Model()
     index_map = MOI.copy_to(model, src)
     _copy_to(dest, model)
     return index_map
 end
+```
+
+## ModelFilter
+
+Utilities provides [`Utilities.ModelFilter`](@ref) as a useful tool to copy a
+subset of a model. For example, given an infeasible model, we can copy the
+irreducible infeasible subsystem (for models implementing
+[`ConstraintConflictStatus`](@ref)) as follows:
+```julia
+my_filter(::Any) = true
+function my_filter(ci::MOI.ConstraintIndex)
+    status = MOI.get(dest, MOI.ConstraintConflictStatus(), ci)
+    return status != MOI.NOT_IN_CONFLICT
+end
+filtered_src = MOI.Utilities.ModelFilter(my_filter, src)
+index_map = MOI.copy_to(dest, filtered_src)
 ```
 
 ## Fallbacks
@@ -484,5 +423,52 @@ used instead. For example:
 ```julia
 function MOI.get(model::Optimizer, attr::MOI.ObjectiveFunction)
     return MOI.Utilities.get_fallback(model, attr)
+end
+```
+
+## DoubleDicts
+
+When writing MOI interfaces, we often need to handle situations in which we map
+[`ConstraintIndex`](@ref)s to different values. For example, to a string
+for [`ConstraintName`](@ref).
+
+One option is to use a dictionary like `Dict{MOI.ConstraintIndex,String}`.
+However, this incurs a performance cost because the key is not a concrete type.
+
+The DoubleDicts submodule helps this situation by providing two types main
+types [`Utilities.DoubleDicts.DoubleDict`](@ref) and
+[`Utilities.DoubleDicts.IndexDoubleDict`](@ref). These types act like normal
+dictionaries, but internally they use more efficient dictionaries specialized to
+the type of the function-set pair.
+
+The most common usage of a `DoubleDict` is in the `index_map` returned by
+[`copy_to`](@ref). Performance can be improved, by using a function barrier.
+That is, instead of code like:
+```julia
+index_map = MOI.copy_to(dest, src)
+for (F, S) in MOI.get(src, MOI.ListOfConstraintTypesPresent())
+    for ci in MOI.get(src, MOI.ListOfConstraintIndices{F,S}())
+        dest_ci = index_map[ci]
+        # ...
+    end
+end
+```
+use instead:
+```julia
+function function_barrier(
+    dest,
+    src,
+    index_map::MOI.Utilities.DoubleDicts.IndexDoubleDictInner{F,S},
+) where {F,S}
+    for ci in MOI.get(src, MOI.ListOfConstraintIndices{F,S}())
+        dest_ci = index_map[ci]
+        # ...
+    end
+    return
+end
+
+index_map = MOI.copy_to(dest, src)
+for (F, S) in MOI.get(src, MOI.ListOfConstraintTypesPresent())
+    function_barrier(dest, src, index_map[F, S])
 end
 ```

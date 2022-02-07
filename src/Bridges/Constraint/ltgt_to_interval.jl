@@ -9,9 +9,15 @@ Bridge a `F`-in-`Interval` constraint into an `F`-in-`Interval{T}` constraint wh
 
 The `F`-in-`Interval{T}` constraint is stored in the `constraint`
 field by convention.
-It is required that T be a AbstractFloat type because otherwise
-typemin and typemax would either be not implemented (e.g. BigInt)
-or would not give infinite value (e.g. Int).
+
+!!! warning
+    It is required that `T` be a `AbstractFloat` type because otherwise
+    `typemin` and `typemax` would either be not implemented (e.g. `BigInt`)
+    or would not give infinite value (e.g. `Int`). For this reason,
+    this bridge is only added to
+    [`MathOptInterface.Bridges.full_bridge_optimizer`](@ref).
+
+    when `T` is a subtype of `AbstractFloat`.
 """
 abstract type AbstractToIntervalBridge{
     T<:AbstractFloat,
@@ -20,10 +26,15 @@ abstract type AbstractToIntervalBridge{
 } <: SetMapBridge{T,MOI.Interval{T},S1,F,F} end
 
 # The function map is the identity. It is also an involution, symmetric, and a symmetric involution.
-map_function(::Type{<:AbstractToIntervalBridge{T}}, func) where {T} = func
-inverse_map_function(::Type{<:AbstractToIntervalBridge}, func) = func
-adjoint_map_function(::Type{<:AbstractToIntervalBridge}, func) = func
-inverse_adjoint_map_function(::Type{<:AbstractToIntervalBridge}, func) = func
+MOIB.map_function(::Type{<:AbstractToIntervalBridge{T}}, func) where {T} = func
+MOIB.inverse_map_function(::Type{<:AbstractToIntervalBridge}, func) = func
+MOIB.adjoint_map_function(::Type{<:AbstractToIntervalBridge}, func) = func
+function MOIB.inverse_adjoint_map_function(
+    ::Type{<:AbstractToIntervalBridge},
+    func,
+)
+    return func
+end
 
 # FIXME are these modify functions necessary?
 function MOI.modify(
@@ -56,11 +67,14 @@ struct GreaterToIntervalBridge{T,F<:MOI.AbstractScalarFunction} <:
     constraint::CI{F,MOI.Interval{T}}
 end
 
-function map_set(::Type{<:GreaterToIntervalBridge}, set::MOI.GreaterThan)
+function MOIB.map_set(::Type{<:GreaterToIntervalBridge}, set::MOI.GreaterThan)
     return MOI.Interval(set.lower, typemax(set.lower))
 end
 
-function inverse_map_set(::Type{<:GreaterToIntervalBridge}, set::MOI.Interval)
+function MOIB.inverse_map_set(
+    ::Type{<:GreaterToIntervalBridge},
+    set::MOI.Interval,
+)
     return MOI.GreaterThan(set.lower)
 end
 
@@ -84,11 +98,11 @@ struct LessToIntervalBridge{T,F<:MOI.AbstractScalarFunction} <:
     constraint::CI{F,MOI.Interval{T}}
 end
 
-function map_set(::Type{<:LessToIntervalBridge}, set::MOI.LessThan)
+function MOIB.map_set(::Type{<:LessToIntervalBridge}, set::MOI.LessThan)
     return MOI.Interval(typemin(set.upper), set.upper)
 end
 
-function inverse_map_set(::Type{<:LessToIntervalBridge}, set::MOI.Interval)
+function MOIB.inverse_map_set(::Type{<:LessToIntervalBridge}, set::MOI.Interval)
     return MOI.LessThan(set.upper)
 end
 

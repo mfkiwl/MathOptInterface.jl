@@ -27,16 +27,38 @@ Utilities.Model
 Utilities.UniversalFallback
 ```
 
-## Utilities.@macro
+## Utilities.@model
 
 ```@docs
 Utilities.@model
 Utilities.GenericModel
 Utilities.GenericOptimizer
+```
+
+### `.objective`
+
+```@docs
+Utilities.ObjectiveContainer
+```
+
+### `.variables`
+
+```@docs
+Utilities.VariablesContainer
+Utilities.FreeVariables
+```
+
+### `.constraints`
+
+```@docs
+Utilities.VectorOfConstraints
+Utilities.StructOfConstraints
+Utilities.@struct_of_constraints_by_function_types
+Utilities.@struct_of_constraints_by_set_types
 Utilities.struct_of_constraint_code
 ```
 
-### Caching optimizer
+## Caching optimizer
 
 ```@docs
 Utilities.CachingOptimizer
@@ -45,6 +67,12 @@ Utilities.reset_optimizer
 Utilities.drop_optimizer
 Utilities.state
 Utilities.mode
+```
+
+## Mock optimizer
+
+```@docs
+Utilities.MockOptimizer
 ```
 
 ## Printing
@@ -56,27 +84,10 @@ Utilities.latex_formulation
 ## Copy utilities
 
 ```@docs
-Utilities.automatic_copy_to
 Utilities.default_copy_to
 Utilities.IndexMap
 Utilities.identity_index_map
-```
-
-### [Allocate-Load API](@id allocate_load_api_ref)
-
-```@docs
-Utilities.allocate_load
-Utilities.supports_allocate_load
-Utilities.allocate_variables
-Utilities.allocate_constrained_variable
-Utilities.allocate_constrained_variables
-Utilities.allocate
-Utilities.allocate_constraint
-Utilities.load_variables
-Utilities.load_constrained_variable
-Utilities.load_constrained_variables
-Utilities.load
-Utilities.load_constraint
+Utilities.ModelFilter
 ```
 
 ## MatrixOfConstraints
@@ -93,6 +104,7 @@ Utilities.allocate_terms
 Utilities.set_number_of_rows
 Utilities.load_terms
 Utilities.final_touch
+Utilities.extract_function
 ```
 
 ```@docs
@@ -106,10 +118,12 @@ Utilities.OneBasedIndexing
 
 ```@docs
 Utilities.load_constants
+Utilities.function_constants
+Utilities.set_from_constants
 ```
 
 ```@docs
-Utilities.Box
+Utilities.Hyperrectangle
 ```
 
 ### `.sets`
@@ -119,6 +133,8 @@ Utilities.set_index
 Utilities.set_types
 Utilities.add_set
 Utilities.rows
+Utilities.num_rows
+Utilities.set_with_dimension
 ```
 
 ```@docs
@@ -164,6 +180,8 @@ The following functions can be used to manipulate functions with basic algebra:
 
 ```@docs
 Utilities.scalar_type
+Utilities.scalarize
+Utilities.eachscalar
 Utilities.promote_operation
 Utilities.operate
 Utilities.operate!
@@ -193,4 +211,13 @@ The following utilities are useful when working with symmetric matrix cones.
 ```@docs
 Utilities.is_diagonal_vectorized_index
 Utilities.side_dimension_for_vectorized_dimension
+```
+
+## DoubleDicts
+
+```@docs
+Utilities.DoubleDicts.DoubleDict
+Utilities.DoubleDicts.DoubleDictInner
+Utilities.DoubleDicts.IndexDoubleDict
+Utilities.DoubleDicts.IndexDoubleDictInner
 ```

@@ -34,7 +34,7 @@ end
 The number of constraints of the type `F`-in-`S` created by the bridge `b` in
 the model.
 """
-MOI.get(::AbstractBridge, ::MOI.NumberOfConstraints) = 0
+MOI.get(::AbstractBridge, ::MOI.NumberOfConstraints)::Int64 = 0
 
 """
     MOI.get(b::AbstractBridge, ::MOI.ListOfConstraintIndices{F, S}) where {F, S}
@@ -84,7 +84,14 @@ function MOI.get(
 )
     return throw(
         ArgumentError(
-            "Bridge of type `$(typeof(bridge))` does not support accessing the attribute `$attr`.",
+            "Bridge of type `$(typeof(bridge))` does not support accessing " *
+            "the attribute `$attr`. If you encountered this error " *
+            "unexpectedly, it probably means your model has been " *
+            "reformulated using the bridge, and you are attempting to query " *
+            "an attribute that we haven't implemented yet for this bridge. " *
+            "Please open an issue at https://github.com/jump-dev/MathOptInterface.jl/issues/new " *
+            "and provide a reproducible example explaining what you were " *
+            "trying to do.",
         ),
     )
 end
@@ -126,7 +133,7 @@ end
 """
     added_constrained_variable_types(
         BT::Type{<:Variable.AbstractBridge},
-    )::Vector{Tuple{DataType}}
+    )::Vector{Tuple{Type}}
 
 Return a list of the types of constrained variables that bridges of concrete
 type `BT` add. This is used by the [`LazyBridgeOptimizer`](@ref).
@@ -136,7 +143,7 @@ function added_constrained_variable_types end
 """
     added_constraint_types(
         BT::Type{<:Constraint.AbstractBridge},
-    )::Vector{Tuple{DataType, DataType}}
+    )::Vector{Tuple{Type, Type}}
 
 Return a list of the types of constraints that bridges of concrete type `BT`
 add. This is used by the [`LazyBridgeOptimizer`](@ref).

@@ -26,7 +26,6 @@ end
 function test_errors_inconsistent_vectorscalar()
     model = DummyModel()
     vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
     @test_throws(
         MOI.ErrorException,
         MOI.add_constraint(
@@ -37,7 +36,7 @@ function test_errors_inconsistent_vectorscalar()
     )
     @test_throws(
         MOI.ErrorException,
-        MOI.add_constraint(model, func, MOI.Nonnegatives(2))
+        MOI.add_constraint(model, vi, MOI.Nonnegatives(2))
     )
     return
 end
@@ -45,14 +44,13 @@ end
 function _test_errors_UnsupportedConstraint(f)
     model = DummyModel()
     vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
-    @test_throws(MOI.UnsupportedConstraint, f(model, func, MOI.EqualTo(0)),)
+    @test_throws(MOI.UnsupportedConstraint, f(model, vi, MOI.EqualTo(0)),)
     try
-        f(model, func, MOI.EqualTo(0))
+        f(model, vi, MOI.EqualTo(0))
     catch err
         @test sprint(showerror, err) ==
-              "$(MOI.UnsupportedConstraint{MOI.SingleVariable,MOI.EqualTo{Int}}):" *
-              " `$MOI.SingleVariable`-in-`$MOI.EqualTo{$Int}` constraint is" *
+              "$(MOI.UnsupportedConstraint{MOI.VariableIndex,MOI.EqualTo{Int}}):" *
+              " `$MOI.VariableIndex`-in-`$MOI.EqualTo{$Int}` constraint is" *
               " not supported by the model."
     end
     return
@@ -60,15 +58,6 @@ end
 
 function test_errors_UnsupportedConstraint()
     _test_errors_UnsupportedConstraint(MOI.add_constraint)
-    _test_errors_UnsupportedConstraint(MOI.Utilities.allocate_constraint)
-    _test_errors_UnsupportedConstraint() do model, func, set
-        return MOI.Utilities.load_constraint(
-            model,
-            MOI.ConstraintIndex{typeof(func),typeof(set)}(1),
-            func,
-            set,
-        )
-    end
     return
 end
 
@@ -89,17 +78,16 @@ end
 function test_errors_add_constraint()
     model = DummyModel()
     vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
     @test_throws(
         MOI.AddConstraintNotAllowed,
-        MOI.add_constraint(model, func, MOI.EqualTo(0.0)),
+        MOI.add_constraint(model, vi, MOI.EqualTo(0.0)),
     )
     try
-        MOI.add_constraint(model, func, MOI.EqualTo(0.0))
+        MOI.add_constraint(model, vi, MOI.EqualTo(0.0))
     catch err
         @test sprint(showerror, err) ==
-              "$(MOI.AddConstraintNotAllowed{MOI.SingleVariable,MOI.EqualTo{Float64}}):" *
-              " Adding `$MOI.SingleVariable`-in-`$MOI.EqualTo{Float64}`" *
+              "$(MOI.AddConstraintNotAllowed{MOI.VariableIndex,MOI.EqualTo{Float64}}):" *
+              " Adding `$MOI.VariableIndex`-in-`$MOI.EqualTo{Float64}`" *
               " constraints cannot be performed. You may want to use a" *
               " `CachingOptimizer` in `AUTOMATIC` mode or you may need to call" *
               " `reset_optimizer` before doing this operation if the" *
@@ -124,44 +112,10 @@ function test_errors_add_constraint()
     return
 end
 
-function test_errors_allocate_constraint()
-    model = DummyModel()
-    vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
-    @test_throws(
-        MOI.ErrorException,
-        MOIU.allocate_constraint(model, func, MOI.EqualTo(0.0)),
-    )
-    try
-        MOIU.allocate_constraint(model, func, MOI.EqualTo(0.0))
-    catch err
-        @test err === MOIU.ALLOCATE_LOAD_NOT_IMPLEMENTED
-    end
-    return
-end
-
-function test_errors_load_constraint()
-    model = DummyModel()
-    vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
-    ci = MOI.ConstraintIndex{typeof(func),MOI.EqualTo{Float64}}(1)
-    @test_throws(
-        MOI.ErrorException,
-        MOIU.load_constraint(model, ci, func, MOI.EqualTo(0.0)),
-    )
-    try
-        MOIU.load_constraint(model, ci, func, MOI.EqualTo(0.0))
-    catch err
-        @test err === MOIU.ALLOCATE_LOAD_NOT_IMPLEMENTED
-    end
-    return
-end
-
 function test_errors_DeleteNotAllowed()
     model = DummyModel()
     vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
-    ci = MOI.ConstraintIndex{MOI.SingleVariable,MOI.EqualTo{Float64}}(1)
+    ci = MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}(1)
     @test_throws MOI.DeleteNotAllowed{typeof(vi)} MOI.delete(model, vi)
     try
         MOI.delete(model, vi)
@@ -179,8 +133,8 @@ function test_errors_DeleteNotAllowed()
         MOI.delete(model, ci)
     catch err
         @test sprint(showerror, err) ==
-              "$(MathOptInterface.DeleteNotAllowed{MathOptInterface.ConstraintIndex{MathOptInterface.SingleVariable,MathOptInterface.EqualTo{Float64}}}):" *
-              " Deleting the index $(MathOptInterface.ConstraintIndex{MathOptInterface.SingleVariable,MathOptInterface.EqualTo{Float64}}(1))" *
+              "$(MathOptInterface.DeleteNotAllowed{MathOptInterface.ConstraintIndex{MathOptInterface.VariableIndex,MathOptInterface.EqualTo{Float64}}}):" *
+              " Deleting the index $(MathOptInterface.ConstraintIndex{MathOptInterface.VariableIndex,MathOptInterface.EqualTo{Float64}}(1))" *
               " cannot be performed. You may want to use a `CachingOptimizer`" *
               " in `AUTOMATIC` mode or you may need to call `reset_optimizer`" *
               " before doing this operation if the `CachingOptimizer` is in" *
@@ -192,15 +146,10 @@ end
 function _test_unsupported_attribute(f)
     model = DummyModel()
     vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
-    ci = MOI.ConstraintIndex{typeof(func),MOI.EqualTo{Float64}}(1)
+    ci = MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}(1)
     @test_throws(
         MOI.UnsupportedAttribute,
-        f(
-            model,
-            MOI.ObjectiveFunction{MOI.SingleVariable}(),
-            MOI.SingleVariable(vi),
-        ),
+        f(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), vi),
     )
     @test_throws(
         MOI.UnsupportedAttribute,
@@ -211,16 +160,13 @@ end
 
 function test_errors_unsupported_attribute()
     _test_unsupported_attribute(MOI.set)
-    _test_unsupported_attribute(MOI.Utilities.load)
-    _test_unsupported_attribute(MOI.Utilities.allocate)
     return
 end
 
 function test_errors_SetAttributeNotAllowed()
     model = DummyModel()
     vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
-    ci = MOI.ConstraintIndex{typeof(func),MOI.EqualTo{Float64}}(1)
+    ci = MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}(1)
     model = DummyModel()
     @test_throws(
         MOI.SetAttributeNotAllowed,
@@ -233,59 +179,19 @@ function test_errors_SetAttributeNotAllowed()
     return
 end
 
-function test_errors_allocate()
-    model = DummyModel()
-    vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
-    ci = MOI.ConstraintIndex{typeof(func),MOI.EqualTo{Float64}}(1)
-    @test_throws(
-        MOI.ErrorException,
-        MOI.Utilities.allocate(model, MOI.ObjectiveSense(), MOI.MAX_SENSE),
-    )
-    try
-        MOI.Utilities.allocate(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
-    catch err
-        @test err === MOIU.ALLOCATE_LOAD_NOT_IMPLEMENTED
-    end
-    @test_throws(
-        MOI.ErrorException,
-        MOI.Utilities.allocate(model, MOI.ConstraintPrimalStart(), ci, 0.0),
-    )
-    return
-end
-
-function test_errors_load()
-    model = DummyModel()
-    vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
-    ci = MOI.ConstraintIndex{typeof(func),MOI.EqualTo{Float64}}(1)
-    @test_throws(
-        MOI.ErrorException,
-        MOI.Utilities.load(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
-    )
-    try
-        MOI.Utilities.load(model, MOI.ObjectiveSense(), MOI.MAX_SENSE)
-    catch err
-        @test err === MOIU.ALLOCATE_LOAD_NOT_IMPLEMENTED
-    end
-    @test_throws(
-        MOI.ErrorException,
-        MOI.Utilities.load(model, MOI.ConstraintPrimalStart(), ci, 0.0),
-    )
-    return
-end
-
 function test_errors_ConstraintFunction_NotAllowed()
     model = DummyModel()
     vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
-    ci = MOI.ConstraintIndex{typeof(func),MOI.EqualTo{Float64}}(1)
+    ci = MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}(1)
     @test_throws(
         MOI.SetAttributeNotAllowed,
-        MOI.set(model, MOI.ConstraintFunction(), ci, func)
+        MOI.set(model, MOI.ConstraintFunction(), ci, vi)
     )
     @test_throws(
-        ArgumentError,
+        MOI.FunctionTypeMismatch{
+            MOI.VariableIndex,
+            MOI.ScalarAffineFunction{Float64},
+        },
         MOI.set(
             model,
             MOI.ConstraintFunction(),
@@ -299,18 +205,17 @@ end
 function test_errors_ConstraintSet_NotAllowed()
     model = DummyModel()
     vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
-    ci = MOI.ConstraintIndex{typeof(func),MOI.EqualTo{Float64}}(1)
+    ci = MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}(1)
     @test_throws(
         MOI.SetAttributeNotAllowed,
         MOI.set(model, MOI.ConstraintSet(), ci, MOI.EqualTo(1.0))
     )
     @test_throws(
-        ArgumentError,
+        MOI.SetTypeMismatch{MOI.EqualTo{Float64},MOI.EqualTo{Int}},
         MOI.set(model, MOI.ConstraintSet(), ci, MOI.EqualTo(1))
     )
     @test_throws(
-        ArgumentError,
+        MOI.SetTypeMismatch{MOI.EqualTo{Float64},MOI.GreaterThan{Float64}},
         MOI.set(model, MOI.ConstraintSet(), ci, MOI.GreaterThan(1.0))
     )
 end
@@ -318,14 +223,13 @@ end
 function test_errors_ModifyNotAllowed_constraint()
     model = DummyModel()
     vi = MOI.VariableIndex(1)
-    func = MOI.SingleVariable(vi)
-    ci = MOI.ConstraintIndex{typeof(func),MOI.EqualTo{Float64}}(1)
+    ci = MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}(1)
     change = MOI.ScalarConstantChange(1.0)
     err = MOI.ModifyConstraintNotAllowed(ci, change)
     @test_throws err MOI.modify(model, ci, change)
     @test sprint(showerror, err) ==
-          "$(MathOptInterface.ModifyConstraintNotAllowed{MathOptInterface.SingleVariable,MathOptInterface.EqualTo{Float64},MathOptInterface.ScalarConstantChange{Float64}}):" *
-          " Modifying the constraints $(MathOptInterface.ConstraintIndex{MathOptInterface.SingleVariable,MathOptInterface.EqualTo{Float64}}(1))" *
+          "$(MathOptInterface.ModifyConstraintNotAllowed{MathOptInterface.VariableIndex,MathOptInterface.EqualTo{Float64},MathOptInterface.ScalarConstantChange{Float64}}):" *
+          " Modifying the constraints $(MathOptInterface.ConstraintIndex{MathOptInterface.VariableIndex,MathOptInterface.EqualTo{Float64}}(1))" *
           " with MathOptInterface.ScalarConstantChange{Float64}(1.0) cannot" *
           " be performed. You may want to use a `CachingOptimizer` in" *
           " `AUTOMATIC` mode or you may need to call `reset_optimizer`" *
@@ -336,7 +240,7 @@ end
 function test_errors_ModifyNotAllowed_objective()
     model = DummyModel()
     change = MOI.ScalarConstantChange(1.0)
-    attr = MOI.ObjectiveFunction{MOI.SingleVariable}()
+    attr = MOI.ObjectiveFunction{MOI.VariableIndex}()
     err = MOI.ModifyObjectiveNotAllowed(change)
     @test_throws err MOI.modify(model, attr, change)
     @test sprint(showerror, err) ==
@@ -393,6 +297,35 @@ function test_errors_InvalidCalbackUsage()
         MOI.InvalidCallbackUsage(MOI.LazyConstraintCallback(), MOI.UserCut(1)),
     ) ==
           "InvalidCallbackUsage: Cannot submit $(MOI.UserCut(1)) inside a MathOptInterface.LazyConstraintCallback()."
+end
+
+struct TestCopyToFallback <: MOI.AbstractOptimizer end
+
+function test_errors_copy_to_fallback()
+    dest = TestCopyToFallback()
+    @test_throws(
+        ErrorException(
+            "`copy_to` is not supported by the solver `$(typeof(dest))`. Did " *
+            "you mean to call " *
+            "`optimize!(dest::AbstractOptimizer, src::ModelLike)` instead?",
+        ),
+        MOI.copy_to(dest, MOI.Utilities.Model{Float64}()),
+    )
+    return
+end
+
+struct Optimizer1697 <: MOI.AbstractOptimizer end
+
+function test_compute_conflict_fallback()
+    model = Optimizer1697()
+    @test_throws(
+        ArgumentError(
+            "The optimizer $(typeof(model)) does not support " *
+            "`compute_conflict!`",
+        ),
+        MOI.compute_conflict!(model),
+    )
+    return
 end
 
 function runtests()

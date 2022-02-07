@@ -1,7 +1,7 @@
 """
     FunctionizeBridge{T}
 
-The `FunctionizeBridge` converts a `SingleVariable` objective into a
+The `FunctionizeBridge` converts a `VariableIndex` objective into a
 `ScalarAffineFunction{T}` objective.
 """
 struct FunctionizeBridge{T} <: AbstractBridge end
@@ -9,7 +9,7 @@ struct FunctionizeBridge{T} <: AbstractBridge end
 function bridge_objective(
     ::Type{FunctionizeBridge{T}},
     model::MOI.ModelLike,
-    func::MOI.SingleVariable,
+    func::MOI.VariableIndex,
 ) where {T}
     F = MOI.ScalarAffineFunction{T}
     MOI.set(model, MOI.ObjectiveFunction{F}(), convert(F, func))
@@ -18,17 +18,17 @@ end
 
 function supports_objective_function(
     ::Type{<:FunctionizeBridge},
-    ::Type{MOI.SingleVariable},
+    ::Type{MOI.VariableIndex},
 )
     return true
 end
 
 function MOIB.added_constrained_variable_types(::Type{<:FunctionizeBridge})
-    return Tuple{DataType}[]
+    return Tuple{Type}[]
 end
 
 function MOIB.added_constraint_types(::Type{<:FunctionizeBridge})
-    return Tuple{DataType,DataType}[]
+    return Tuple{Type,Type}[]
 end
 
 function MOIB.set_objective_function_type(
@@ -38,9 +38,7 @@ function MOIB.set_objective_function_type(
 end
 
 # Attributes, Bridge acting as a model
-function MOI.get(::FunctionizeBridge, ::MOI.NumberOfVariables)
-    return 0
-end
+MOI.get(::FunctionizeBridge, ::MOI.NumberOfVariables)::Int64 = 0
 
 function MOI.get(::FunctionizeBridge, ::MOI.ListOfVariableIndices)
     return MOI.VariableIndex[]
@@ -63,7 +61,7 @@ end
 
 function MOI.get(
     model::MOI.ModelLike,
-    attr::MOIB.ObjectiveFunctionValue{MOI.SingleVariable},
+    attr::MOIB.ObjectiveFunctionValue{MOI.VariableIndex},
     ::FunctionizeBridge{T},
 ) where {T}
     F = MOI.ScalarAffineFunction{T}
@@ -72,10 +70,10 @@ end
 
 function MOI.get(
     model::MOI.ModelLike,
-    ::MOI.ObjectiveFunction{MOI.SingleVariable},
+    ::MOI.ObjectiveFunction{MOI.VariableIndex},
     ::FunctionizeBridge{T},
 ) where {T}
     F = MOI.ScalarAffineFunction{T}
     func = MOI.get(model, MOI.ObjectiveFunction{F}())
-    return convert(MOI.SingleVariable, func)
+    return convert(MOI.VariableIndex, func)
 end

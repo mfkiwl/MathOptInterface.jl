@@ -1,12 +1,12 @@
-!!! warning
-    This documentation is still under construction. If you need help with JuMP,
-    read the [JuMP documentation](https://jump.dev/JuMP.jl/stable/) instead. If
-    you are writing a solver interface and need help with MOI, join the
-    [developer chatroom](https://gitter.im/JuliaOpt/JuMP-dev) and ask away!
+# Introduction
 
-# MathOptInterface
+Welcome to the documentation for MathOptInterface.
 
-# What is MathOptInterface?
+!!! note
+    This documentation is also available in PDF format:
+    [MathOptInterface.pdf](MathOptInterface.pdf).
+
+## What is MathOptInterface?
 
 [MathOptInterface.jl](https://github.com/jump-dev/MathOptInterface.jl) (MOI) is
 an abstraction layer designed to provide a unified interface to mathematical
@@ -26,11 +26,14 @@ solver-specific APIs.
 Having a high-level overview of how this documentation is structured will help
 you know where to look for certain things.
 
-* The **Background** section contains articles on the motivation and theory
+* The **Tutorials** section contains articles on how to use and implement the
+  MathOptInteraface API. Look here if you want to write a model in MOI, or write
+  an interface to a new solver.
+* The **Manual** contains short code-snippets that explain how to use the MOI
+  API. Look here for more details on particular areas of MOI.
+* The **Background** section contains articles on the theory
   behind MathOptInterface. Look here if you want to understand _why_, rather
   than _how_.
-* The **Manual** contains short code-snippets that explain how to use the MOI
-  API. Look here if you want to write a model in MOI.
 * The **API Reference** contains a complete list of functions and types that
   comprise the MOI API. Look here is you want to know how to use (or implement)
   a particular function.
@@ -45,15 +48,13 @@ is available on [arXiv](https://arxiv.org).
 
 If you find MathOptInterface useful in your work, we kindly request that you
 cite the following paper:
-```
-@misc{
-    legat2020mathoptinterface,
-    title = {MathOptInterface: a data structure for mathematical optimization problems},
-    author = {Beno{\^i}t Legat and Oscar Dowson and Joaquim Dias Garcia and Miles Lubin},
-    year = {2020},
-    eprint = {2002.03447},
-    archivePrefix = {arXiv},
-    primaryClass = {math.OC},
-    url = {https://arxiv.org/abs/2002.03447},
+```bibtex
+@article{legat2021mathoptinterface,
+    title={{MathOptInterface}: a data structure for mathematical optimization problems},
+    author={Legat, Beno{\^\i}t and Dowson, Oscar and Garcia, Joaquim Dias and Lubin, Miles},
+    journal={INFORMS Journal on Computing},
+    year={2021},
+    doi={10.1287/ijoc.2021.1067},
+    publisher={INFORMS}
 }
 ```

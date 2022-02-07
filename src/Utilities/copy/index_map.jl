@@ -1,3 +1,11 @@
+# IndexMap is defined here because there is a boostrapping problem.
+#  * IndexMap requires `Utilities.CleverDicts` and `Utilities.DoubleDicts`, so
+#    if it were to be defined in MOI proper, it must be included after
+#    Utilities.
+#  * However, Utilities requires IndexMap, so it must be defined before
+#    Utilities.jl is included.
+# To work around this issue, we define `IndexMap` here.
+
 struct IndexMap <: AbstractDict{MOI.Index,MOI.Index}
     var_map::CleverDicts.CleverDict{
         MOI.VariableIndex,
@@ -5,48 +13,23 @@ struct IndexMap <: AbstractDict{MOI.Index,MOI.Index}
         typeof(CleverDicts.key_to_index),
         typeof(CleverDicts.index_to_key),
     }
-    con_map::DoubleDicts.MainIndexDoubleDict
+    con_map::DoubleDicts.IndexDoubleDict
 end
 
 """
-    IndexMap(n::Int = 0)
+    IndexMap()
 
-Dictionary-like object returned by [`MathOptInterface.copy_to`](@ref) that
-contains the mapping between variable indices in `.var_map` and between
-constraint indices in `.con_map`.
+The dictionary-like object returned by [`MathOptInterface.copy_to`](@ref).
 """
-function IndexMap(n::Int = 0)
-    var_map = CleverDicts.CleverDict{MOI.VariableIndex,MOI.VariableIndex}(
-        CleverDicts.key_to_index,
-        CleverDicts.index_to_key,
-        n,
-    )
+function IndexMap()
+    var_map = CleverDicts.CleverDict{MOI.VariableIndex,MOI.VariableIndex}()
     con_map = DoubleDicts.IndexDoubleDict()
     return IndexMap(var_map, con_map)
 end
 
-"""
-    _index_map_for_variable_indices(variables)
-
-This function does not add variables to the IndexMap.
-It simply initializes the IndexMap with a proper data struture.
-If the variable indices are contiguous and start from 1, then
-an optimized data structure with pre allocated memory is initialized.
-Otherwise the data structure will start empty and will try to
-keep using performant structure for as long as possible.
-"""
-function _index_map_for_variable_indices(variables)
-    n = length(variables)
-    if all(i -> variables[i] == MOI.VariableIndex(i), 1:n)
-        return IndexMap(n)
-    else
-        return IndexMap()
-    end
-end
-
 function _identity_constraints_map(
     model,
-    map::MOIU.DoubleDicts.IndexWithType{F,S},
+    map::MOIU.DoubleDicts.IndexDoubleDictInner{F,S},
 ) where {F,S}
     for c in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         map[c] = c
@@ -62,7 +45,7 @@ Return an [`IndexMap`](@ref) that maps all variable and constraint indices of
 """
 function identity_index_map(model::MOI.ModelLike)
     variables = MOI.get(model, MOI.ListOfVariableIndices())
-    map = _index_map_for_variable_indices(variables)
+    map = IndexMap()
     for x in variables
         map[x] = x
     end

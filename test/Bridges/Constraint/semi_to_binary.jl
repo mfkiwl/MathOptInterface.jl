@@ -1,125 +1,132 @@
+module TestConstraintSemiToBinary
+
 using Test
 
 using MathOptInterface
 const MOI = MathOptInterface
-const MOIT = MathOptInterface.Test
-const MOIU = MathOptInterface.Utilities
-const MOIB = MathOptInterface.Bridges
-const MOIBC = MathOptInterface.Bridges.Constraint
+
+function runtests()
+    for name in names(@__MODULE__; all = true)
+        if startswith("$(name)", "test_")
+            @testset "$(name)" begin
+                getfield(@__MODULE__, name)()
+            end
+        end
+    end
+    return
+end
 
 include("../utilities.jl")
 
-mock = MOIU.MockOptimizer(MOIU.UniversalFallback(MOIU.Model{Float64}()))
-config = MOIT.Config()
-
-@testset "SemiToBinary" begin
-    bridged_mock = MOIBC.SemiToBinary{Float64}(mock)
-
-    bridge_type = MOIBC.SemiToBinaryBridge{Float64,MOI.Semiinteger{Float64}}
+function test_SemiToBinary()
+    mock = MOI.Utilities.MockOptimizer(
+        MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}()),
+    )
+    config = MOI.Test.Config()
+    bridged_mock = MOI.Bridges.Constraint.SemiToBinary{Float64}(mock)
+    bridge_type = MOI.Bridges.Constraint.SemiToBinaryBridge{
+        Float64,
+        MOI.Semiinteger{Float64},
+    }
     @test MOI.supports_constraint(
         bridge_type,
-        MOI.SingleVariable,
+        MOI.VariableIndex,
         MOI.Semiinteger{Float64},
     )
-    @test MOIBC.concrete_bridge_type(
+    @test MOI.Bridges.Constraint.concrete_bridge_type(
         bridge_type,
-        MOI.SingleVariable,
+        MOI.VariableIndex,
         MOI.Semiinteger{Float64},
     ) == bridge_type
-
     @test MOI.supports(bridged_mock, MOI.ConstraintPrimalStart(), bridge_type)
-
-    MOIT.basic_constraint_tests(
+    MOI.Test.runtests(
         bridged_mock,
         config,
         include = [
-            (F, S) for F in [MOI.SingleVariable] for
-            S in [MOI.Semiinteger{Float64}, MOI.Semicontinuous{Float64}]
+            "test_basic_VariableIndex_Semiinteger",
+            "test_basic_VariableIndex_Semicontinuous",
         ],
     )
-
-    MOIU.set_mock_optimize!(
+    MOI.empty!(bridged_mock)
+    MOI.Utilities.set_mock_optimize!(
         mock,
-        (mock::MOIU.MockOptimizer) -> begin
+        (mock::MOI.Utilities.MockOptimizer) -> begin
             MOI.set(mock, MOI.ObjectiveBound(), 0.0)
-            MOIU.mock_optimize!(mock, [0.0, 0.0, 0.0])
+            MOI.Utilities.mock_optimize!(mock, [0.0, 0.0, 0.0])
         end,
-        (mock::MOIU.MockOptimizer) -> begin
+        (mock::MOI.Utilities.MockOptimizer) -> begin
             MOI.set(mock, MOI.ObjectiveBound(), 2.0)
-            MOIU.mock_optimize!(mock, [2.0, 1.0, 1.0])
+            MOI.Utilities.mock_optimize!(mock, [2.0, 1.0, 1.0])
         end,
-        (mock::MOIU.MockOptimizer) -> begin
+        (mock::MOI.Utilities.MockOptimizer) -> begin
             MOI.set(mock, MOI.ObjectiveBound(), 2.0)
-            MOIU.mock_optimize!(mock, [2.0, 2.0, 1.0])
+            MOI.Utilities.mock_optimize!(mock, [2.0, 2.0, 1.0])
         end,
-        (mock::MOIU.MockOptimizer) -> begin
+        (mock::MOI.Utilities.MockOptimizer) -> begin
             MOI.set(mock, MOI.ObjectiveBound(), 2.5)
-            MOIU.mock_optimize!(mock, [2.5, 2.5, 1.0])
+            MOI.Utilities.mock_optimize!(mock, [2.5, 2.5, 1.0])
         end,
-        (mock::MOIU.MockOptimizer) -> begin
+        (mock::MOI.Utilities.MockOptimizer) -> begin
             MOI.set(mock, MOI.ObjectiveBound(), 3.0)
-            MOIU.mock_optimize!(mock, [3.0, 3.0, 1.0])
+            MOI.Utilities.mock_optimize!(mock, [3.0, 3.0, 1.0])
         end,
-        (mock::MOIU.MockOptimizer) ->
+        (mock::MOI.Utilities.MockOptimizer) ->
             MOI.set(mock, MOI.TerminationStatus(), MOI.INFEASIBLE),
     )
-    MOIT.semiconttest(bridged_mock, config)
-
+    MOI.Test.test_linear_Semicontinuous_integration(bridged_mock, config)
     ci = first(
         MOI.get(
             bridged_mock,
             MOI.ListOfConstraintIndices{
-                MOI.SingleVariable,
+                MOI.VariableIndex,
                 MOI.Semicontinuous{Float64},
             }(),
         ),
     )
-
-    test_delete_bridge(
+    _test_delete_bridge(
         bridged_mock,
         ci,
         2,
         (
-            (MOI.SingleVariable, MOI.EqualTo{Float64}, 1),
-            (MOI.SingleVariable, MOI.ZeroOne, 0),
-            (MOI.SingleVariable, MOI.Integer, 0),
+            (MOI.VariableIndex, MOI.EqualTo{Float64}, 1),
+            (MOI.VariableIndex, MOI.ZeroOne, 0),
+            (MOI.VariableIndex, MOI.Integer, 0),
             (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}, 0),
             (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}, 1),
         ),
     )
-
-    MOIU.set_mock_optimize!(
+    MOI.empty!(bridged_mock)
+    MOI.Utilities.set_mock_optimize!(
         mock,
-        (mock::MOIU.MockOptimizer) -> begin
+        (mock::MOI.Utilities.MockOptimizer) -> begin
             MOI.set(mock, MOI.ObjectiveBound(), 0.0)
-            MOIU.mock_optimize!(mock, [0.0, 0.0, 0.0])
+            MOI.Utilities.mock_optimize!(mock, [0.0, 0.0, 0.0])
         end,
-        (mock::MOIU.MockOptimizer) -> begin
+        (mock::MOI.Utilities.MockOptimizer) -> begin
             MOI.set(mock, MOI.ObjectiveBound(), 2.0)
-            MOIU.mock_optimize!(mock, [2.0, 1.0, 1.0])
+            MOI.Utilities.mock_optimize!(mock, [2.0, 1.0, 1.0])
         end,
-        (mock::MOIU.MockOptimizer) -> begin
+        (mock::MOI.Utilities.MockOptimizer) -> begin
             MOI.set(mock, MOI.ObjectiveBound(), 2.0)
-            MOIU.mock_optimize!(mock, [2.0, 2.0, 1.0])
+            MOI.Utilities.mock_optimize!(mock, [2.0, 2.0, 1.0])
         end,
-        (mock::MOIU.MockOptimizer) -> begin
+        (mock::MOI.Utilities.MockOptimizer) -> begin
             MOI.set(mock, MOI.ObjectiveBound(), 3.0)
-            MOIU.mock_optimize!(mock, [3.0, 2.5, 1.0])
+            MOI.Utilities.mock_optimize!(mock, [3.0, 2.5, 1.0])
         end,
-        (mock::MOIU.MockOptimizer) -> begin
+        (mock::MOI.Utilities.MockOptimizer) -> begin
             MOI.set(mock, MOI.ObjectiveBound(), 3.0)
-            MOIU.mock_optimize!(mock, [3.0, 3.0, 1.0])
+            MOI.Utilities.mock_optimize!(mock, [3.0, 3.0, 1.0])
         end,
-        (mock::MOIU.MockOptimizer) ->
+        (mock::MOI.Utilities.MockOptimizer) ->
             MOI.set(mock, MOI.TerminationStatus(), MOI.INFEASIBLE),
     )
-    MOIT.semiinttest(bridged_mock, config)
-
+    MOI.Test.test_linear_Semiinteger_integration(bridged_mock, config)
     ci = first(
         MOI.get(
             bridged_mock,
             MOI.ListOfConstraintIndices{
-                MOI.SingleVariable,
+                MOI.VariableIndex,
                 MOI.Semiinteger{Float64},
             }(),
         ),
@@ -129,35 +136,32 @@ config = MOIT.Config()
     new_set = MOI.Semiinteger{Float64}(19.0, 20.0)
     MOI.set(bridged_mock, MOI.ConstraintSet(), ci, new_set)
     @test MOI.get(bridged_mock, MOI.ConstraintSet(), ci) == new_set
-
-    @testset "$attr" for attr in [MOI.ConstraintPrimalStart()]
+    for attr in [MOI.ConstraintPrimalStart()]
         @test MOI.supports(bridged_mock, attr, typeof(ci))
         value = 2.0
         MOI.set(bridged_mock, attr, ci, value)
         @test MOI.get(bridged_mock, attr, ci) ≈ value
     end
-
-    test_delete_bridge(
+    _test_delete_bridge(
         bridged_mock,
         ci,
         2,
         (
-            (MOI.SingleVariable, MOI.EqualTo{Float64}, 1),
-            (MOI.SingleVariable, MOI.ZeroOne, 0),
-            (MOI.SingleVariable, MOI.Integer, 0),
+            (MOI.VariableIndex, MOI.EqualTo{Float64}, 1),
+            (MOI.VariableIndex, MOI.ZeroOne, 0),
+            (MOI.VariableIndex, MOI.Integer, 0),
             (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}, 0),
             (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}, 1),
         ),
     )
-
     s = """
     variables: x, y
     y == 4.0
     x in Semiinteger(2.0, 3.0)
     minobjective: x
     """
-    model = MOIU.Model{Float64}()
-    MOIU.loadfromstring!(model, s)
+    model = MOI.Utilities.Model{Float64}()
+    MOI.Utilities.loadfromstring!(model, s)
     sb = """
     variables: x, y, z
     y == 4.0
@@ -167,13 +171,12 @@ config = MOIT.Config()
     cup: x + -3.0z <= 0.0
     minobjective: x
     """
-    modelb = MOIU.Model{Float64}()
-    MOIU.loadfromstring!(modelb, sb)
-
+    modelb = MOI.Utilities.Model{Float64}()
+    MOI.Utilities.loadfromstring!(modelb, sb)
     MOI.empty!(bridged_mock)
     @test MOI.is_empty(bridged_mock)
-    MOIU.loadfromstring!(bridged_mock, s)
-    MOIU.test_models_equal(
+    MOI.Utilities.loadfromstring!(bridged_mock, s)
+    MOI.Test.util_test_models_equal(
         bridged_mock,
         model,
         ["x", "y"],
@@ -183,12 +186,11 @@ config = MOIT.Config()
             ("y", MOI.EqualTo{Float64}(4.0)),
         ],
     )
-
     # setting names on mock
     ci = first(
         MOI.get(
             mock,
-            MOI.ListOfConstraintIndices{MOI.SingleVariable,MOI.ZeroOne}(),
+            MOI.ListOfConstraintIndices{MOI.VariableIndex,MOI.ZeroOne}(),
         ),
     )
     z = MOI.VariableIndex(ci.value)
@@ -196,7 +198,7 @@ config = MOIT.Config()
     ci = first(
         MOI.get(
             mock,
-            MOI.ListOfConstraintIndices{MOI.SingleVariable,MOI.Integer}(),
+            MOI.ListOfConstraintIndices{MOI.VariableIndex,MOI.Integer}(),
         ),
     )
     ci = first(
@@ -219,8 +221,7 @@ config = MOIT.Config()
         ),
     )
     MOI.set(mock, MOI.ConstraintName(), ci, "cup")
-
-    MOIU.test_models_equal(
+    MOI.Test.util_test_models_equal(
         mock,
         modelb,
         ["x", "y", "z"],
@@ -231,4 +232,32 @@ config = MOIT.Config()
             ("z", MOI.ZeroOne()),
         ],
     )
+    return
 end
+
+"""
+    test_lower_bound_already_set()
+
+The second call to `add_constraint` is broken because it should throw:
+```julia
+MOI.LowerBoundAlreadySet{
+    MOI.Semicontinuous{Float64},
+    MOI.GreaterThan{Float64},
+}
+```
+See MathOptInterface issue #1431.
+"""
+function test_lower_bound_already_set()
+    model = MOI.Utilities.Model{Float64}()
+    bridged = MOI.Bridges.Constraint.SemiToBinary{Float64}(model)
+    x = MOI.add_variable(bridged)
+    MOI.add_constraint(bridged, x, MOI.Semicontinuous(1.0, 2.0))
+    @test_broken(
+        MOI.add_constraint(bridged, x, MOI.GreaterThan(0.0)) === nothing,
+    )
+    return
+end
+
+end  # module
+
+TestConstraintSemiToBinary.runtests()

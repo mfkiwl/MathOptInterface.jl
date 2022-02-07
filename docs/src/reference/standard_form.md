@@ -13,8 +13,9 @@ DocTestFilters = [r"MathOptInterface|MOI"]
 
 ```@docs
 AbstractFunction
+AbstractScalarFunction
 AbstractVectorFunction
-SingleVariable
+VariableIndex
 VectorOfVariables
 ScalarAffineTerm
 ScalarAffineFunction
@@ -32,8 +33,8 @@ VectorQuadraticFunction
 output_dimension
 constant(f::Union{ScalarAffineFunction, ScalarQuadraticFunction})
 constant(f::Union{VectorAffineFunction, VectorQuadraticFunction})
-constant(f::SingleVariable, ::DataType)
-constant(f::VectorOfVariables, T::DataType)
+constant(f::VariableIndex, ::Type)
+constant(f::VectorOfVariables, T::Type)
 ```
 
 ## Sets
@@ -91,23 +92,28 @@ NormSpectralCone
 NormNuclearCone
 SOS1
 SOS2
-IndicatorSet
+Indicator
 Complements
 ```
 
 ## Matrix sets
 
 Matrix sets are vectorized in order to be subtypes of
-[`AbstractVectorSet`](@ref). For sets of symmetric matrices, storing both the
-`(i, j)` and `(j, i)` elements is redundant so there exists the
+[`AbstractVectorSet`](@ref).
+
+For sets of symmetric matrices, storing both the
+`(i, j)` and `(j, i)` elements is redundant. Use the
 [`AbstractSymmetricMatrixSetTriangle`](@ref) set to represent only the
-vectorization of the upper triangular part of the matrix. When the matrix
-of expressions constrained to be in the set is not symmetric and hence
-the `(i, j)` and `(j, i)` elements should be constrained to be symmetric,
-the [`AbstractSymmetricMatrixSetSquare`](@ref) set can be used. The
-[`Bridges.Constraint.SquareBridge`](@ref) can transform a set from the square
-form to the [`triangular_form`](@ref) by adding appropriate constraints if
-the `(i, j)` and `(j, i)` expressions are different.
+vectorization of the upper triangular part of the matrix.
+
+When the matrix of expressions constrained to be in the set is not symmetric,
+and hence additional constraints are needed to force the equality of the
+`(i, j)` and `(j, i)` elements, use the
+[`AbstractSymmetricMatrixSetSquare`](@ref) set.
+
+The [`Bridges.Constraint.SquareBridge`](@ref) can transform a set from the
+square form to the [`triangular_form`](@ref) by adding appropriate constraints
+if the `(i, j)` and `(j, i)` expressions are different.
 
 ```@docs
 AbstractSymmetricMatrixSetTriangle

@@ -1,14 +1,3 @@
-# Functions
-
-import MutableArithmetics
-
-"""
-    AbstractFunction
-
-Abstract supertype for function objects.
-"""
-abstract type AbstractFunction <: MutableArithmetics.AbstractMutable end
-
 """
     output_dimension(f::AbstractFunction)
 
@@ -17,34 +6,11 @@ has a vector output.
 """
 function output_dimension end
 
-"""
-    AbstractScalarFunction
-
-Abstract supertype for scalar-valued function objects.
-"""
-abstract type AbstractScalarFunction <: AbstractFunction end
 output_dimension(::AbstractScalarFunction) = 1
 
 Base.broadcastable(f::AbstractScalarFunction) = Ref(f)
 Base.ndims(::Type{<:AbstractScalarFunction}) = 0
 Base.ndims(::AbstractScalarFunction) = 0
-
-"""
-    AbstractVectorFunction
-
-Abstract supertype for vector-valued function objects.
-"""
-abstract type AbstractVectorFunction <: AbstractFunction end
-
-"""
-    SingleVariable(variable)
-
-The function that extracts the scalar variable referenced by `variable`, a `VariableIndex`.
-This function is naturally be used for single variable bounds or integrality constraints.
-"""
-struct SingleVariable <: AbstractScalarFunction
-    variable::VariableIndex
-end
 
 """
     VectorOfVariables(variables)
@@ -147,12 +113,16 @@ struct ScalarQuadraticTerm{T}
     variable_2::VariableIndex
 end
 
-# Note: ScalarQuadraticFunction is mutable because its `constant` field is likely of an immutable
-# type, while its other fields are of mutable types, meaning that creating a `ScalarQuadraticFunction`
-# allocates, and it is desirable to provide a zero-allocation option for working with
-# ScalarQuadraticFunctions. See https://github.com/jump-dev/MathOptInterface.jl/pull/343.
+# Note: ScalarQuadraticFunction is mutable because its `constant` field is
+# likely of an immutable type, while its other fields are of mutable types,
+# meaning that creating a `ScalarQuadraticFunction` allocates, and it is
+# desirable to provide a zero-allocation option for working with
+# ScalarQuadraticFunctions.
+#
+# See https://github.com/jump-dev/MathOptInterface.jl/pull/343.
+
 """
-    ScalarQuadraticFunction{T}(affine_terms, quadratic_terms, constant)
+    ScalarQuadraticFunction{T}(quadratic_terms, affine_terms, constant)
 
 The scalar-valued quadratic function ``\\frac{1}{2}x^TQx + a^T x + b``, where:
 * ``a`` is a sparse vector specified by a list of `ScalarAffineTerm` structs.
@@ -170,8 +140,8 @@ For example, for two scalar variables ``y, z``, the quadratic expression
 `ScalarQuadraticTerm.([1.0, 2.0], [y, y], [z, y])`.
 """
 mutable struct ScalarQuadraticFunction{T} <: AbstractScalarFunction
-    affine_terms::Vector{ScalarAffineTerm{T}}
     quadratic_terms::Vector{ScalarQuadraticTerm{T}}
+    affine_terms::Vector{ScalarAffineTerm{T}}
     constant::T
 end
 
@@ -198,7 +168,7 @@ function VectorQuadraticTerm(
 end
 
 """
-    VectorQuadraticFunction{T}(affine_terms, quadratic_terms, constants)
+    VectorQuadraticFunction{T}(quadratic_terms, affine_terms, constants)
 
 The vector-valued quadratic function with i`th` component ("output index")
 defined as ``\\frac{1}{2}x^TQ_ix + a_i^T x + b_i``, where:
@@ -214,10 +184,11 @@ coefficients are summed together. "Mirrored" indices `(q,r)` and `(r,q)` (where
 specified.
 """
 struct VectorQuadraticFunction{T} <: AbstractVectorFunction
-    affine_terms::Vector{VectorAffineTerm{T}}
     quadratic_terms::Vector{VectorQuadraticTerm{T}}
+    affine_terms::Vector{VectorAffineTerm{T}}
     constants::Vector{T}
 end
+
 output_dimension(f::VectorQuadraticFunction) = length(f.constants)
 
 # Function modifications
@@ -294,16 +265,22 @@ function Base.:(==)(f::VectorOfVariables, g::VectorOfVariables)
 end
 
 function Base.isapprox(
-    f::Union{SingleVariable,VectorOfVariables},
-    g::Union{SingleVariable,VectorOfVariables};
+    f::Union{VariableIndex,VectorOfVariables},
+    g::Union{VariableIndex,VectorOfVariables};
     kwargs...,
 )
     return f == g
 end
 
-# For affine and quadratic functions, terms are compressed in a dictionary using `_dicts` and then the dictionaries are compared with `dict_compare`
+# For affine and quadratic functions, terms are compressed in a dictionary using
+# `_dicts` and then the dictionaries are compared with `dict_compare`
 function dict_compare(d1::Dict, d2::Dict{<:Any,T}, compare::Function) where {T}
-    return all(kv -> compare(kv.second, Base.get(d2, kv.first, zero(T))), d1)
+    for key in union(keys(d1), keys(d2))
+        if !compare(Base.get(d1, key, zero(T)), Base.get(d2, key, zero(T)))
+            return false
+        end
+    end
+    return true
 end
 
 # Build a dictionary where the duplicate keys are summed
@@ -376,8 +353,8 @@ end
 
 function _dicts(f::Union{ScalarQuadraticFunction,VectorQuadraticFunction})
     return (
-        sum_dict(term_pair.(f.affine_terms)),
         sum_dict(term_pair.(f.quadratic_terms)),
+        sum_dict(term_pair.(f.affine_terms)),
     )
 end
 
@@ -422,37 +399,34 @@ function Base.isapprox(
     )
 end
 
-function constant(
-    f::Union{ScalarAffineFunction,ScalarQuadraticFunction},
-    T::DataType,
-)
+function constant(f::Union{ScalarAffineFunction,ScalarQuadraticFunction}, ::Any)
     return constant(f)
 end
-function constant(
-    f::Union{VectorAffineFunction,VectorQuadraticFunction},
-    T::DataType,
-)
+
+function constant(f::Union{VectorAffineFunction,VectorQuadraticFunction}, ::Any)
     return constant(f)
 end
 
 """
-    constant(f::SingleVariable, T::DataType)
+    constant(f::VariableIndex, ::Type{T}) where {T}
 
-The constant term of a `SingleVariable` function is
+The constant term of a `VariableIndex` function is
 the zero value of the specified type `T`.
 """
-constant(f::SingleVariable, T::DataType) = zero(T)
+constant(f::VariableIndex, ::Type{T}) where {T} = zero(T)
 
 """
-    constant(f::VectorOfVariables, T::DataType)
+    constant(f::VectorOfVariables, ::Type{T}) where {T}
 
 The constant term of a `VectorOfVariables` function is a
 vector of zero values of the specified type `T`.
 """
-constant(f::VectorOfVariables, T::DataType) = zeros(T, length(f.variables))
+function constant(f::VectorOfVariables, ::Type{T}) where {T}
+    return zeros(T, length(f.variables))
+end
 
 # isbits type, nothing to copy
-Base.copy(func::SingleVariable) = func
+Base.copy(func::VariableIndex) = func
 
 Base.copy(func::VectorOfVariables) = VectorOfVariables(copy(func.variables))
 
@@ -478,16 +452,16 @@ function Base.copy(
     func::F,
 ) where {F<:Union{ScalarQuadraticFunction,VectorQuadraticFunction}}
     return F(
-        copy(func.affine_terms),
         copy(func.quadratic_terms),
+        copy(func.affine_terms),
         copy(constant(func)),
     )
 end
 
 # Define shortcuts for
-# SingleVariable -> ScalarAffineFunction
-function ScalarAffineFunction{T}(f::SingleVariable) where {T}
-    return ScalarAffineFunction([ScalarAffineTerm(one(T), f.variable)], zero(T))
+# VariableIndex -> ScalarAffineFunction
+function ScalarAffineFunction{T}(f::VariableIndex) where {T}
+    return ScalarAffineFunction([ScalarAffineTerm(one(T), f)], zero(T))
 end
 # VectorOfVariables -> VectorAffineFunction
 function VectorAffineFunction{T}(f::VectorOfVariables) where {T}
@@ -502,23 +476,23 @@ function VectorAffineFunction{T}(f::VectorOfVariables) where {T}
 end
 
 # Conversion between scalar functions
-# Conversion to SingleVariable
-function Base.convert(::Type{SingleVariable}, f::ScalarAffineFunction)
+# Conversion to VariableIndex
+function Base.convert(::Type{VariableIndex}, f::ScalarAffineFunction)
     if (
         !iszero(f.constant) ||
         !isone(length(f.terms)) ||
         !isone(f.terms[1].coefficient)
     )
-        throw(InexactError(:convert, SingleVariable, f))
+        throw(InexactError(:convert, VariableIndex, f))
     end
-    return SingleVariable(f.terms[1].variable)
+    return f.terms[1].variable
 end
 
 function Base.convert(
-    ::Type{SingleVariable},
+    ::Type{VariableIndex},
     f::ScalarQuadraticFunction{T},
 ) where {T}
-    return convert(SingleVariable, convert(ScalarAffineFunction{T}, f))
+    return convert(VariableIndex, convert(ScalarAffineFunction{T}, f))
 end
 
 # Conversion to ScalarAffineFunction
@@ -528,7 +502,7 @@ end
 
 function Base.convert(
     ::Type{ScalarAffineFunction{T}},
-    f::SingleVariable,
+    f::VariableIndex,
 ) where {T}
     return ScalarAffineFunction{T}(f)
 end
@@ -574,15 +548,15 @@ end
 # Conversion to ScalarQuadraticFunction
 function Base.convert(::Type{ScalarQuadraticFunction{T}}, α::T) where {T}
     return ScalarQuadraticFunction{T}(
-        ScalarAffineTerm{T}[],
         ScalarQuadraticTerm{T}[],
+        ScalarAffineTerm{T}[],
         α,
     )
 end
 
 function Base.convert(
     ::Type{ScalarQuadraticFunction{T}},
-    f::SingleVariable,
+    f::VariableIndex,
 ) where {T}
     return convert(
         ScalarQuadraticFunction{T},
@@ -595,33 +569,33 @@ function Base.convert(
     f::ScalarAffineFunction{T},
 ) where {T}
     return ScalarQuadraticFunction{T}(
-        f.terms,
         ScalarQuadraticTerm{T}[],
+        f.terms,
         f.constant,
     )
 end
 
-function Base.convert(::Type{VectorOfVariables}, g::SingleVariable)
-    return VectorOfVariables([g.variable])
+function Base.convert(::Type{VectorOfVariables}, g::VariableIndex)
+    return VectorOfVariables([g])
 end
 
 function Base.convert(
     ::Type{VectorAffineFunction{T}},
-    g::SingleVariable,
+    g::VariableIndex,
 ) where {T}
     return VectorAffineFunction{T}(
-        [VectorAffineTerm(1, ScalarAffineTerm(one(T), g.variable))],
+        [VectorAffineTerm(1, ScalarAffineTerm(one(T), g))],
         [zero(T)],
     )
 end
 
 function Base.convert(
     ::Type{VectorQuadraticFunction{T}},
-    g::SingleVariable,
+    g::VariableIndex,
 ) where {T}
     return VectorQuadraticFunction{T}(
-        [VectorAffineTerm(1, ScalarAffineTerm(one(T), g.variable))],
         VectorQuadraticTerm{T}[],
+        [VectorAffineTerm(1, ScalarAffineTerm(one(T), g))],
         [zero(T)],
     )
 end
@@ -641,8 +615,8 @@ function Base.convert(
     g::ScalarAffineFunction,
 ) where {T}
     return VectorQuadraticFunction{T}(
-        VectorAffineTerm{T}[VectorAffineTerm(1, term) for term in g.terms],
         VectorQuadraticTerm{T}[],
+        VectorAffineTerm{T}[VectorAffineTerm(1, term) for term in g.terms],
         [g.constant],
     )
 end
@@ -652,11 +626,11 @@ function Base.convert(
     g::ScalarQuadraticFunction,
 ) where {T}
     return VectorQuadraticFunction{T}(
-        VectorAffineTerm{T}[
-            VectorAffineTerm(1, term) for term in g.affine_terms
-        ],
         VectorQuadraticTerm{T}[
             VectorQuadraticTerm(1, term) for term in g.quadratic_terms
+        ],
+        VectorAffineTerm{T}[
+            VectorAffineTerm(1, term) for term in g.affine_terms
         ],
         [g.constant],
     )

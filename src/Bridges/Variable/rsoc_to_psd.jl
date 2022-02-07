@@ -18,7 +18,7 @@ struct RSOCtoPSDBridge{T} <: AbstractBridge
         },
         MOI.ConstraintIndex{MOI.VectorOfVariables,MOI.Nonnegatives},
     }
-    off_diag::Vector{MOI.ConstraintIndex{MOI.SingleVariable,MOI.EqualTo{T}}}
+    off_diag::Vector{MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{T}}}
     diag::Vector{
         MOI.ConstraintIndex{MOI.ScalarAffineFunction{T},MOI.EqualTo{T}},
     }
@@ -29,7 +29,7 @@ function bridge_constrained_variable(
     model::MOI.ModelLike,
     set::MOI.RotatedSecondOrderCone,
 ) where {T}
-    off_diag = MOI.ConstraintIndex{MOI.SingleVariable,MOI.EqualTo{T}}[]
+    off_diag = MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{T}}[]
     diag = MOI.ConstraintIndex{MOI.ScalarAffineFunction{T},MOI.EqualTo{T}}[]
     if set.dimension <= 2
         variables, psd = MOI.add_constrained_variables(
@@ -43,7 +43,7 @@ function bridge_constrained_variable(
             MOI.PositiveSemidefiniteConeTriangle(dim),
         )
         # This is `2 * u`
-        u2 = MOI.SingleVariable(variables[3])
+        u2 = variables[3]
         k = 3
         for j in 3:dim
             k += 1
@@ -53,16 +53,16 @@ function bridge_constrained_variable(
                     off_diag,
                     MOI.add_constraint(
                         model,
-                        MOI.SingleVariable(variables[k]),
+                        variables[k],
                         MOI.EqualTo(zero(T)),
                     ),
                 )
             end
             k += 1
-            func = MOIU.operate(-, T, u2, MOI.SingleVariable(variables[k]))
+            func = MOIU.operate(-, T, u2, variables[k])
             push!(diag, MOI.add_constraint(model, func, MOI.EqualTo(zero(T))))
         end
-        @assert k == trimap(dim, dim)
+        @assert k == MOIU.trimap(dim, dim)
     end
     return RSOCtoPSDBridge{T}(variables, psd, off_diag, diag)
 end
@@ -75,18 +75,21 @@ function supports_constrained_variable(
 end
 
 function MOIB.added_constrained_variable_types(::Type{<:RSOCtoPSDBridge})
-    return [(MOI.PositiveSemidefiniteConeTriangle,), (MOI.Nonnegatives,)]
+    return Tuple{Type}[
+        (MOI.PositiveSemidefiniteConeTriangle,),
+        (MOI.Nonnegatives,),
+    ]
 end
 
 function MOIB.added_constraint_types(::Type{RSOCtoPSDBridge{T}}) where {T}
-    return [
-        (MOI.SingleVariable, MOI.EqualTo{T}),
+    return Tuple{Type,Type}[
+        (MOI.VariableIndex, MOI.EqualTo{T}),
         (MOI.ScalarAffineFunction{T}, MOI.EqualTo{T}),
     ]
 end
 
 # Attributes, Bridge acting as a model
-function MOI.get(bridge::RSOCtoPSDBridge, ::MOI.NumberOfVariables)
+function MOI.get(bridge::RSOCtoPSDBridge, ::MOI.NumberOfVariables)::Int64
     return length(bridge.variables)
 end
 
@@ -97,8 +100,12 @@ end
 function MOI.get(
     bridge::RSOCtoPSDBridge,
     ::MOI.NumberOfConstraints{MOI.VectorOfVariables,S},
-) where {S<:Union{MOI.PositiveSemidefiniteConeTriangle,MOI.Nonnegatives}}
-    return bridge.psd isa MOI.ConstraintIndex{MOI.VectorOfVariables,S} ? 1 : 0
+)::Int64 where {S<:Union{MOI.PositiveSemidefiniteConeTriangle,MOI.Nonnegatives}}
+    if bridge.psd isa MOI.ConstraintIndex{MOI.VectorOfVariables,S}
+        return 1
+    else
+        return 0
+    end
 end
 
 function MOI.get(
@@ -114,14 +121,14 @@ end
 
 function MOI.get(
     bridge::RSOCtoPSDBridge{T},
-    ::MOI.NumberOfConstraints{MOI.SingleVariable,MOI.EqualTo{T}},
-) where {T}
+    ::MOI.NumberOfConstraints{MOI.VariableIndex,MOI.EqualTo{T}},
+)::Int64 where {T}
     return length(bridge.off_diag)
 end
 
 function MOI.get(
     bridge::RSOCtoPSDBridge{T},
-    ::MOI.ListOfConstraintIndices{MOI.SingleVariable,MOI.EqualTo{T}},
+    ::MOI.ListOfConstraintIndices{MOI.VariableIndex,MOI.EqualTo{T}},
 ) where {T}
     return copy(bridge.off_diag)
 end
@@ -129,7 +136,7 @@ end
 function MOI.get(
     bridge::RSOCtoPSDBridge{T},
     ::MOI.NumberOfConstraints{MOI.ScalarAffineFunction{T},MOI.EqualTo{T}},
-) where {T}
+)::Int64 where {T}
     return length(bridge.diag)
 end
 
@@ -161,14 +168,6 @@ function MOI.get(::MOI.ModelLike, ::MOI.ConstraintSet, bridge::RSOCtoPSDBridge)
     return MOI.RotatedSecondOrderCone(dim)
 end
 
-function trimap(i::Integer, j::Integer)
-    if i < j
-        return trimap(j, i)
-    else
-        return div((i - 1) * i, 2) + j
-    end
-end
-
 function _variable_map(bridge::RSOCtoPSDBridge, i::MOIB.IndexInVector)
     if bridge.psd isa
        MOI.ConstraintIndex{MOI.VectorOfVariables,MOI.Nonnegatives}
@@ -178,7 +177,7 @@ function _variable_map(bridge::RSOCtoPSDBridge, i::MOIB.IndexInVector)
     elseif i.value == 2
         return 3
     else
-        return trimap(1, i.value - 1)
+        return MOIU.trimap(1, i.value - 1)
     end
 end
 
@@ -238,7 +237,7 @@ function MOIB.bridged_function(
     bridge::RSOCtoPSDBridge{T},
     i::MOIB.IndexInVector,
 ) where {T}
-    func = MOI.SingleVariable(_variable(bridge, i))
+    func = _variable(bridge, i)
     if i.value == 2
         return MOIU.operate(/, T, func, convert(T, 2))
     else
@@ -251,11 +250,10 @@ function unbridged_map(
     vi::MOI.VariableIndex,
     i::MOIB.IndexInVector,
 ) where {T}
-    sv = MOI.SingleVariable(vi)
     if i.value == 2
-        func = MOIU.operate(*, T, convert(T, 2), sv)
+        func = MOIU.operate(*, T, convert(T, 2), vi)
     else
-        func = convert(MOI.ScalarAffineFunction{T}, sv)
+        func = convert(MOI.ScalarAffineFunction{T}, vi)
     end
     return (_variable(bridge, i) => func,)
 end

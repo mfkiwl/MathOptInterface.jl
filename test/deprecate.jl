@@ -42,8 +42,72 @@ function test_deprecations_ScalarQuadraticTerm()
     @test_logs (:warn,) t.variable_index_2 == y
 end
 
+function test_deprecations_ScalarQuadraticFunction()
+    @test_logs(
+        (:warn,),
+        MOI.ScalarQuadraticFunction(
+            MOI.ScalarAffineTerm{Int}[],
+            MOI.ScalarQuadraticTerm{Int}[],
+            0,
+        ),
+    )
+    return
+end
+
+function test_deprecations_VectorQuadraticFunction()
+    @test_logs(
+        (:warn,),
+        MOI.VectorQuadraticFunction(
+            MOI.VectorAffineTerm{Int}[],
+            MOI.VectorQuadraticTerm{Int}[],
+            [0, 1],
+        ),
+    )
+    return
+end
+
 function test_RawOptimizerAttribute()
     @test_logs (:warn,) MOI.RawParameter(:a) == MOI.RawOptimizerAttribute("a")
+end
+
+function test_default_copy_to()
+    dest = MOI.Utilities.Model{Float64}()
+    src = MOI.Utilities.Model{Float64}()
+    @test_logs (:warn,) MOI.Utilities.default_copy_to(dest, src, true)
+    return
+end
+
+function test_copy_to_copy_names()
+    dest = MOI.Utilities.Model{Float64}()
+    src = MOI.Utilities.Model{Float64}()
+    @test_logs (:warn,) MOI.copy_to(dest, src; copy_names = true)
+    return
+end
+
+function test_test_models_equal()
+    dest = MOI.Utilities.Model{Float64}()
+    src = MOI.Utilities.Model{Float64}()
+    @test_logs(
+        (:warn,),
+        MOI.Utilities.test_models_equal(dest, src, String[], String[]),
+    )
+    return
+end
+
+function test_IndexMap()
+    @test_logs (:warn,) MOI.IndexMap(1)
+    return
+end
+
+function test_CleverDicts()
+    K, V = MOI.VariableIndex, MOI.VariableIndex
+    @test_logs (:warn,) MOI.Utilities.CleverDicts.CleverDict{K,V}(1)
+    @test_logs (:warn,) MOI.Utilities.CleverDicts.CleverDict{K,V}(
+        MOI.Utilities.CleverDicts.key_to_index,
+        MOI.Utilities.CleverDicts.index_to_key,
+        1,
+    )
+    return
 end
 
 function runtests()

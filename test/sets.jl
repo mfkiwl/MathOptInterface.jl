@@ -46,7 +46,7 @@ function test_sets_equals()
         @test S(a(), a()) != S(b(), b())
         @test S(a(), a()) == S(a(), a())
     end
-    S = MOI.IndicatorSet
+    S = MOI.Indicator
     A() = MOI.LessThan(a())
     B() = MOI.LessThan(b())
     @test S{MOI.ACTIVATE_ON_ZERO}(A()) == S{MOI.ACTIVATE_ON_ZERO}(A())
@@ -70,15 +70,15 @@ function test_sets_sos2_copy()
 end
 
 function test_sets_indicator_copy()
-    s1 = MOI.IndicatorSet{MOI.ACTIVATE_ON_ONE}(MOI.LessThan(4.0))
-    s2 = MOI.IndicatorSet{MOI.ACTIVATE_ON_ZERO}(MOI.GreaterThan(4.0))
+    s1 = MOI.Indicator{MOI.ACTIVATE_ON_ONE}(MOI.LessThan(4.0))
+    s2 = MOI.Indicator{MOI.ACTIVATE_ON_ZERO}(MOI.GreaterThan(4.0))
     s1_copy = copy(s1)
     s2_copy = copy(s2)
-    @test s1_copy isa MOI.IndicatorSet{MOI.ACTIVATE_ON_ONE}
+    @test s1_copy isa MOI.Indicator{MOI.ACTIVATE_ON_ONE}
     @test s1 == s1_copy
-    @test s2_copy isa MOI.IndicatorSet{MOI.ACTIVATE_ON_ZERO}
+    @test s2_copy isa MOI.Indicator{MOI.ACTIVATE_ON_ZERO}
     @test s2 == s2_copy
-    s3 = MOI.IndicatorSet{MOI.ACTIVATE_ON_ZERO}(MutLessThan(4.0))
+    s3 = MOI.Indicator{MOI.ACTIVATE_ON_ZERO}(MutLessThan(4.0))
     s3_copy = copy(s3)
     @test s3.set.upper ≈ 4.0
     s3_copy.set.upper = 5.0
@@ -91,7 +91,7 @@ function test_sets_broadcast()
     x = MOI.add_variables(model, 3)
     cis = MOI.add_constraint.(model, x, MOI.EqualTo(0.0))
     @test cis isa
-          Vector{MOI.ConstraintIndex{MOI.SingleVariable,MOI.EqualTo{Float64}}}
+          Vector{MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}}
     @test length(cis) == 3
 end
 
@@ -109,13 +109,45 @@ function test_sets_dimension()
     @test MOI.dimension(MOI.SOS1([1.0, 2.0])) == 2
     @test MOI.dimension(MOI.SOS2([1.0, 2.0])) == 2
     @test MOI.dimension(
-        MOI.IndicatorSet{MOI.ACTIVATE_ON_ONE}(MOI.LessThan(1.0)),
+        MOI.Indicator{MOI.ACTIVATE_ON_ONE}(MOI.LessThan(1.0)),
     ) == 2
     @test MOI.dimension(MOI.Complements(10)) == 10
 end
 
-function test_sets_complement()
-    @test_throws ArgumentError MOI.Complements(3)
+function test_sets_DimensionMismatch()
+    for (S, min_dimension) in (
+        (MOI.Reals, 0),
+        (MOI.Zeros, 0),
+        (MOI.Nonnegatives, 0),
+        (MOI.Nonpositives, 0),
+        (MOI.NormInfinityCone, 1),
+        (MOI.NormOneCone, 1),
+        (MOI.SecondOrderCone, 1),
+        (MOI.RotatedSecondOrderCone, 2),
+        (MOI.GeometricMeanCone, 2),
+        (MOI.Complements, 0),
+        (MOI.RelativeEntropyCone, 1),
+        (MOI.PositiveSemidefiniteConeTriangle, 0),
+        (MOI.PositiveSemidefiniteConeSquare, 0),
+        (MOI.LogDetConeTriangle, 0),
+        (MOI.LogDetConeSquare, 0),
+        (MOI.RootDetConeTriangle, 0),
+        (MOI.RootDetConeSquare, 0),
+    )
+        @test_throws DimensionMismatch S(min_dimension - 1)
+        @test S(min_dimension) isa S
+    end
+    @test_throws DimensionMismatch MOI.NormSpectralCone(-1, 0)
+    @test_throws DimensionMismatch MOI.NormSpectralCone(0, -1)
+    @test MOI.NormSpectralCone(0, 0) isa MOI.NormSpectralCone
+    @test_throws DimensionMismatch MOI.NormNuclearCone(-1, 0)
+    @test_throws DimensionMismatch MOI.NormNuclearCone(0, -1)
+    @test MOI.NormNuclearCone(0, 0) isa MOI.NormNuclearCone
+    # Other dimension checks
+    @test_throws DimensionMismatch MOI.RelativeEntropyCone(2)
+    @test_throws DimensionMismatch MOI.Complements(-3)
+    @test_throws DimensionMismatch MOI.Complements(3)
+    return
 end
 
 function _dual_set_test(set1, set2)

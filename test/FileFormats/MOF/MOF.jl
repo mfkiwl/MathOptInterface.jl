@@ -21,7 +21,7 @@ function _validate(filename::String)
         MOI.FileFormats.AutomaticCompression(),
     ) do io
         object = JSON.parse(io)
-        ret = JSONSchema.validate(object, SCHEMA)
+        ret = JSONSchema.validate(SCHEMA, object)
         if ret !== nothing
             error(
                 "Unable to read file because it does not conform to the MOF " *
@@ -41,7 +41,7 @@ function _test_model_equality(model_string, variables, constraints; suffix = "")
     MOI.write_to_file(model, TEST_MOF_FILE * suffix)
     model_2 = MOF.Model()
     MOI.read_from_file(model_2, TEST_MOF_FILE * suffix)
-    MOIU.test_models_equal(model, model_2, variables, constraints)
+    MOI.Test.util_test_models_equal(model, model_2, variables, constraints)
     return _validate(TEST_MOF_FILE * suffix)
 end
 
@@ -80,11 +80,7 @@ function test_HS071()
     for (index, variable) in enumerate(x)
         MOI.set(model, MOI.VariableName(), variable, "var_$(index)")
     end
-    MOI.add_constraints(
-        model,
-        MOI.SingleVariable.(x),
-        Ref(MOI.Interval(1.0, 5.0)),
-    )
+    MOI.add_constraints(model, x, Ref(MOI.Interval(1.0, 5.0)))
     MOI.set(model, MOI.NLPBlock(), HS071(x))
     MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
     MOI.write_to_file(model, TEST_MOF_FILE)
@@ -319,7 +315,7 @@ function test_empty_model()
     MOI.write_to_file(model, TEST_MOF_FILE)
     model_2 = MOF.Model()
     MOI.read_from_file(model_2, TEST_MOF_FILE)
-    return MOIU.test_models_equal(model, model_2, String[], String[])
+    return MOI.Test.util_test_models_equal(model, model_2, String[], String[])
 end
 
 function test_FEASIBILITY_SENSE()
@@ -330,7 +326,7 @@ function test_FEASIBILITY_SENSE()
     MOI.write_to_file(model, TEST_MOF_FILE)
     model_2 = MOF.Model()
     MOI.read_from_file(model_2, TEST_MOF_FILE)
-    return MOIU.test_models_equal(model, model_2, ["x"], String[])
+    return MOI.Test.util_test_models_equal(model, model_2, ["x"], String[])
 end
 
 function test_empty_function_term()
@@ -346,7 +342,7 @@ function test_empty_function_term()
     MOI.write_to_file(model, TEST_MOF_FILE)
     model_2 = MOF.Model()
     MOI.read_from_file(model_2, TEST_MOF_FILE)
-    return MOIU.test_models_equal(model, model_2, ["x"], ["c"])
+    return MOI.Test.util_test_models_equal(model, model_2, ["x"], ["c"])
 end
 
 function test_min_objective()
@@ -763,12 +759,12 @@ c1: [t, x1, x2, x3, x4] in RootDetConeSquare(2)
     )
 end
 
-function test_IndicatorSet()
+function test_Indicator()
     _test_model_equality(
         """
 variables: x, y
 minobjective: x
-c1: [x, y] in IndicatorSet{ACTIVATE_ON_ONE}(GreaterThan(1.0))
+c1: [x, y] in Indicator{ACTIVATE_ON_ONE}(GreaterThan(1.0))
 """,
         ["x", "y"],
         ["c1"],
@@ -778,7 +774,7 @@ c1: [x, y] in IndicatorSet{ACTIVATE_ON_ONE}(GreaterThan(1.0))
         """
 variables: x, y
 minobjective: x
-c1: [x, y] in IndicatorSet{ACTIVATE_ON_ZERO}(GreaterThan(1.0))
+c1: [x, y] in Indicator{ACTIVATE_ON_ZERO}(GreaterThan(1.0))
 """,
         ["x", "y"],
         ["c1"],
@@ -843,6 +839,24 @@ c1: [x, y, z] in NormNuclearCone(1, 2)
         ["x", "y", "z"],
         ["c1"],
     )
+end
+
+function test_v04()
+    model = MOF.Model()
+    MOI.read_from_file(model, joinpath(@__DIR__, "v0.4.mof.json"))
+    model_2 = MOF.Model()
+    MOI.Utilities.loadfromstring!(
+        model_2,
+        """
+variables: x, y
+minobjective: x
+c: x + y >= 1.0
+x in Interval(0.0, 1.0)
+y in ZeroOne()
+""",
+    )
+    MOI.Test.util_test_models_equal(model, model_2, ["x", "y"], ["c"])
+    return
 end
 
 function runtests()

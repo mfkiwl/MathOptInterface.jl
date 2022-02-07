@@ -9,7 +9,7 @@ function Base.read!(io::IO, model::Model)
     end
     object = JSON.parse(io; dicttype = UnorderedObject)
     file_version = _parse_mof_version(object["version"]::UnorderedObject)
-    if file_version.major != VERSION.major || file_version.minor > VERSION.minor
+    if !(file_version in SUPPORTED_VERSIONS)
         error(
             "Sorry, the file can't be read because this library supports " *
             "v$(VERSION) of MathOptFormat, but the file you are trying to " *
@@ -118,7 +118,8 @@ end
 
 @head_to_val(
     head_to_function,
-    SingleVariable,
+    SingleVariable,     # Required for v0.6
+    Variable,           # Required for v1.0
     VectorOfVariables,
     ScalarAffineFunction,
     ScalarQuadraticFunction,
@@ -128,20 +129,17 @@ end
 )
 
 """
-    function_to_moi(
-        x::Object, name_map::Dict{String, MOI.VariableIndex}
-    )
+    function_to_moi(x::Object, name_map::Dict{String,MOI.VariableIndex})
 
 Convert `x` from an MOF representation into a MOI representation.
 """
 function function_to_moi(x::Object, name_map::Dict{String,MOI.VariableIndex})
-    val = if haskey(x, "type")
-        head_to_function(x["type"]::String)
+    if haskey(x, "type")
+        return function_to_moi(head_to_function(x["type"]::String), x, name_map)
     else
-        # TODO(odow): remove when v0.4 no longer supported.
-        head_to_function(x["head"]::String)
+        # Required for v0.4
+        return function_to_moi(head_to_function(x["head"]::String), x, name_map)
     end
-    return function_to_moi(val, x, name_map)
 end
 
 function function_to_moi(
@@ -157,12 +155,22 @@ end
 
 # ========== Non-typed scalar functions ==========
 
+# Required for v0.6
 function function_to_moi(
     ::Val{:SingleVariable},
     object::Object,
     name_map::Dict{String,MOI.VariableIndex},
 )
-    return MOI.SingleVariable(name_map[object["variable"]::String])
+    return name_map[object["variable"]::String]
+end
+
+# Required for v1.0
+function function_to_moi(
+    ::Val{:Variable},
+    object::Object,
+    name_map::Dict{String,MOI.VariableIndex},
+)
+    return name_map[object["name"]::String]
 end
 
 # ========== Typed scalar functions ==========
@@ -209,8 +217,8 @@ function function_to_moi(
     name_map::Dict{String,MOI.VariableIndex},
 )
     return MOI.ScalarQuadraticFunction{Float64}(
-        parse_scalar_affine_term.(object["affine_terms"], Ref(name_map)),
         parse_scalar_quadratic_term.(object["quadratic_terms"], Ref(name_map)),
+        parse_scalar_affine_term.(object["affine_terms"], Ref(name_map)),
         object["constant"]::Float64,
     )
 end
@@ -269,8 +277,8 @@ function function_to_moi(
     name_map::Dict{String,MOI.VariableIndex},
 )
     return MOI.VectorQuadraticFunction{Float64}(
-        parse_vector_affine_term.(object["affine_terms"], Ref(name_map)),
         parse_vector_quadratic_term.(object["quadratic_terms"], Ref(name_map)),
+        parse_vector_affine_term.(object["affine_terms"], Ref(name_map)),
         Float64.(object["constants"]),
     )
 end
@@ -311,7 +319,8 @@ end
     DualPowerCone,
     SOS1,
     SOS2,
-    IndicatorSet,
+    IndicatorSet,   # Required for v0.6
+    Indicator,      # Required for v1.0
     Complements,
 )
 
@@ -324,7 +333,7 @@ function set_to_moi(x::Object)
     if haskey(x, "type")
         return set_to_moi(head_to_set(x["type"]::String), x)
     else
-        # TODO(odow): remove when v0.4 no longer supported.
+        # Required for <v0.4
         return set_to_moi(head_to_set(x["head"]::String), x)
     end
 end
@@ -469,13 +478,14 @@ function set_to_moi(::Val{:SOS2}, object::Object)
     return MOI.SOS2(Float64.(object["weights"]))
 end
 
-function set_to_moi(::Val{:IndicatorSet}, object::Object)
+# :IndicatorSet is required for v0.6
+# :Indicator is required for v1.0
+function set_to_moi(::Union{Val{:Indicator},Val{:IndicatorSet}}, object::Object)
     set = set_to_moi(object["set"]::typeof(object))
-    indicator = if object["activate_on"]::String == "one"
-        MOI.ACTIVATE_ON_ONE
+    if object["activate_on"]::String == "one"
+        return MOI.Indicator{MOI.ACTIVATE_ON_ONE}(set)
     else
         @assert object["activate_on"]::String == "zero"
-        MOI.ACTIVATE_ON_ZERO
+        return MOI.Indicator{MOI.ACTIVATE_ON_ZERO}(set)
     end
-    return MOI.IndicatorSet{indicator}(set)
 end

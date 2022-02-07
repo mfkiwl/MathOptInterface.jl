@@ -18,6 +18,7 @@ get
 get!
 set
 supports
+attribute_value_type
 ```
 
 ## Model interface
@@ -30,6 +31,7 @@ write_to_file
 read_from_file
 supports_incremental_interface
 copy_to
+IndexMap
 ```
 
 ## Model attributes
@@ -66,6 +68,7 @@ default_cache
 ```@docs
 AbstractOptimizerAttribute
 SolverName
+SolverVersion
 Silent
 TimeLimitSec
 RawOptimizerAttribute

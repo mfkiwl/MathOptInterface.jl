@@ -50,3 +50,48 @@ function RawParameter(name::Any)
     )
     return RawOptimizerAttribute(string(name))
 end
+
+function ScalarQuadraticFunction(
+    affine_terms::Vector{<:ScalarAffineTerm{T}},
+    quadratic_terms::Vector{<:ScalarQuadraticTerm{T}},
+    constant::T,
+) where {T}
+    @warn("Fields of ScalarQuadraticFunction have been re-ordered.", maxlog = 1)
+    return ScalarQuadraticFunction(quadratic_terms, affine_terms, constant)
+end
+
+function VectorQuadraticFunction(
+    affine_terms::Vector{<:VectorAffineTerm{T}},
+    quadratic_terms::Vector{<:VectorQuadraticTerm{T}},
+    constant::Vector{T},
+) where {T}
+    @warn("Fields of VectorQuadraticFunction have been re-ordered.", maxlog = 1)
+    return VectorQuadraticFunction(quadratic_terms, affine_terms, constant)
+end
+
+function Utilities.CleverDicts.CleverDict{K,V}(::Base.Integer) where {K,V}
+    @warn("The `n` argument to `CleverDict` has been removed.")
+    return Utilities.CleverDicts.CleverDict{K,V}()
+end
+
+function Utilities.IndexMap(::Int)
+    @warn("The number_of_variables argument to `IndexMap` has been removed.")
+    return Utilities.IndexMap()
+end
+
+function SingleVariable(x::VariableIndex)
+    @warn("`SingleVariable(x)` has been removed; use `x` instead.", maxlog = 1)
+    return x
+end
+
+@deprecate(
+    SingleVariableConstraintNameError,
+    VariableIndexConstraintNameError,
+    false,
+)
+
+@deprecate(
+    SettingSingleVariableFunctionNotAllowed,
+    SettingVariableIndexNotAllowed,
+    false,
+)

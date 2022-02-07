@@ -9,12 +9,6 @@ DocTestFilters = [r"MathOptInterface|MOI"]
 
 # Variables
 
-## Types
-
-```@docs
-VariableIndex
-```
-
 ## Functions
 
 ```@docs
@@ -36,4 +30,5 @@ AbstractVariableAttribute
 VariableName
 VariablePrimalStart
 VariablePrimal
+VariableBasisStatus
 ```

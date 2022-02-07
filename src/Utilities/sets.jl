@@ -41,6 +41,7 @@ function shift_constant(
 ) where {T}
     return typeof(set)(MOI.constant(set) + offset)
 end
+
 supports_shift_constant(::Type{<:MOI.LessThan}) = true
 supports_shift_constant(::Type{<:MOI.GreaterThan}) = true
 supports_shift_constant(::Type{<:MOI.EqualTo}) = true
@@ -50,14 +51,52 @@ function shift_constant(set::MOI.Interval, offset)
 end
 supports_shift_constant(::Type{<:MOI.Interval}) = true
 
+"""
+    ScalarLinearSet{T}
+
+The union of scalar-valued linear sets with element type `T`.
+
+This is used in the vectorize and scalarize bridges.
+
+See also: [`VectorLinearSet`](@ref).
+"""
 const ScalarLinearSet{T} =
     Union{MOI.EqualTo{T},MOI.LessThan{T},MOI.GreaterThan{T}}
+
+"""
+    VectorLinearSet
+
+The union of vector-valued linear cones.
+
+This is used in the vectorize and scalarize bridges.
+
+See also: [`ScalarLinearSet`](@ref).
+"""
 const VectorLinearSet = Union{MOI.Zeros,MOI.Nonnegatives,MOI.Nonpositives}
 
+"""
+    vector_set_type(::Type{S}) where {S}
+
+A utility function to map scalar sets `S` to their vector equivalents.
+
+This is used in the vectorize and scalarize bridges.
+
+See also: [`scalar_set_type`](@ref).
+"""
 vector_set_type(::Type{<:MOI.EqualTo}) = MOI.Zeros
 vector_set_type(::Type{<:MOI.LessThan}) = MOI.Nonpositives
 vector_set_type(::Type{<:MOI.GreaterThan}) = MOI.Nonnegatives
 
+"""
+    scalar_set_type(::Type{S}, ::Type{T}) where {S,T}
+
+A utility function to map vector sets `S` to their scalar equivalents with
+element type `T`.
+
+This is used in the vectorize and scalarize bridges.
+
+See also: [`vector_set_type`](@ref).
+"""
 scalar_set_type(::Type{<:MOI.Zeros}, T::Type) = MOI.EqualTo{T}
 scalar_set_type(::Type{<:MOI.Nonpositives}, T::Type) = MOI.LessThan{T}
 scalar_set_type(::Type{<:MOI.Nonnegatives}, T::Type) = MOI.GreaterThan{T}
@@ -82,4 +121,20 @@ Return the dimension `d` such that
 """
 function side_dimension_for_vectorized_dimension(n::Base.Integer)
     return div(isqrt(1 + 8n), 2)
+end
+
+"""
+    trimap(row::Integer, column::Integer)
+
+Convert between the row and column indices of a matrix, to the linear index of
+the corresponding element in the triangular representation.
+
+This is most useful when mapping between `ConeSquare` and `ConeTriangle` sets,
+e.g., as part of an [`MOI.AbstractSymmetricMatrixSetTriangle`](@ref) set.
+"""
+function trimap(row::Integer, column::Integer)
+    if row < column
+        return trimap(column, row)
+    end
+    return div((row - 1) * row, 2) + column
 end

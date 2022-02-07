@@ -89,7 +89,7 @@ function moi_to_object(
     func = MOI.get(model, MOI.ConstraintFunction(), index)
     set = MOI.get(model, MOI.ConstraintSet(), index)
     object = OrderedObject()
-    if F != MOI.SingleVariable
+    if F != MOI.VariableIndex
         name = MOI.get(model, MOI.ConstraintName(), index)
         if name != ""
             object["name"] = name
@@ -114,13 +114,10 @@ end
 # ========== Non-typed scalar functions ==========
 
 function moi_to_object(
-    foo::MOI.SingleVariable,
+    foo::MOI.VariableIndex,
     name_map::Dict{MOI.VariableIndex,String},
 )
-    return OrderedObject(
-        "type" => "SingleVariable",
-        "variable" => name_map[foo.variable],
-    )
+    return OrderedObject("type" => "Variable", "name" => name_map[foo])
 end
 
 # ========== Typed scalar functions ==========
@@ -295,12 +292,12 @@ head_name(::Type{<:MOI.SOS1}) = "SOS1"
 head_name(::Type{<:MOI.SOS2}) = "SOS2"
 
 function moi_to_object(
-    set::MOI.IndicatorSet{I,S},
+    set::MOI.Indicator{I,S},
     name_map::Dict{MOI.VariableIndex,String},
 ) where {I,S}
     @assert I == MOI.ACTIVATE_ON_ONE || I == MOI.ACTIVATE_ON_ZERO
     return OrderedObject(
-        "type" => "IndicatorSet",
+        "type" => "Indicator",
         "set" => moi_to_object(set.set, name_map),
         "activate_on" => (I == MOI.ACTIVATE_ON_ONE) ? "one" : "zero",
     )

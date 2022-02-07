@@ -17,13 +17,19 @@ Compute the objective function value using the `VariablePrimal` results and
 the `ObjectiveFunction` value.
 """
 function get_fallback(model::MOI.ModelLike, attr::MOI.ObjectiveValue)
+    MOI.check_result_index_bounds(model, attr)
     F = MOI.get(model, MOI.ObjectiveFunctionType())
     f = MOI.get(model, MOI.ObjectiveFunction{F}())
-    # TODO do not include constant if primal solution is a ray
-    return eval_variables(
+    obj = eval_variables(
         vi -> MOI.get(model, MOI.VariablePrimal(attr.result_index), vi),
         f,
     )
+    if is_ray(MOI.get(model, MOI.PrimalStatus()))
+        # Dual infeasibiltiy certificates do not include the primal objective
+        # constant.
+        obj -= MOI.constant(f, typeof(obj))
+    end
+    return obj
 end
 
 function constraint_constant(
@@ -144,6 +150,7 @@ function get_fallback(
     attr::MOI.DualObjectiveValue,
     T::Type,
 )
+    MOI.check_result_index_bounds(model, attr)
     value = zero(T) # sum will not work if there are zero constraints
     for (F, S) in MOI.get(model, MOI.ListOfConstraintTypesPresent())
         value += dual_objective_value(model, F, S, T, attr.result_index)::T
@@ -172,12 +179,15 @@ function get_fallback(
     attr::MOI.ConstraintPrimal,
     idx::MOI.ConstraintIndex,
 )
+    MOI.check_result_index_bounds(model, attr)
     f = MOI.get(model, MOI.ConstraintFunction(), idx)
-    # TODO do not include constant if primal solution is a ray
-    return eval_variables(
-        vi -> MOI.get(model, MOI.VariablePrimal(attr.result_index), vi),
-        f,
-    )
+    c = eval_variables(f) do vi
+        return MOI.get(model, MOI.VariablePrimal(attr.result_index), vi)
+    end
+    if is_ray(MOI.get(model, MOI.PrimalStatus()))
+        c -= MOI.constant(f, typeof(c))
+    end
+    return c
 end
 
 ################ Constraint Dual for Variable-wise constraints #################
@@ -368,13 +378,13 @@ function variable_dual(
     ::MOI.ConstraintDual,
     ci::MOI.ConstraintIndex,
     vi::MOI.VariableIndex,
-    F::Type{<:Union{MOI.SingleVariable,MOI.VectorOfVariables}},
+    F::Type{<:Union{MOI.VariableIndex,MOI.VectorOfVariables}},
     S::Type{<:MOI.AbstractSet},
 )
     for constraint_index in MOI.get(model, MOI.ListOfConstraintIndices{F,S}())
         if constraint_index != ci
             func = MOI.get(model, MOI.ConstraintFunction(), constraint_index)
-            if (F == MOI.SingleVariable && func.variable == vi) ||
+            if (F == MOI.VariableIndex && func == vi) ||
                (F == MOI.VectorOfVariables && vi in func.variables)
                 error(
                     "Fallback getter for variable constraint dual does not",
@@ -412,8 +422,8 @@ function variable_dual(
         sign = sense == MOI.MAX_SENSE ? -1.0 : 1.0
         F = MOI.get(model, MOI.ObjectiveFunctionType())
         obj_attr = MOI.ObjectiveFunction{F}()
-        if F == MOI.SingleVariable
-            if MOI.get(model, obj_attr).variable == vi
+        if F == MOI.VariableIndex
+            if MOI.get(model, obj_attr) == vi
                 dual += sign
             end
         elseif F <: MOI.ScalarAffineFunction
@@ -442,23 +452,6 @@ function variable_dual(
     return dual
 end
 
-"""
-    variable_dual(model::MOI.ModelLike, attr::MOI.ConstraintDual,
-                  ci::MOI.ConstraintIndex{F},
-                  func::F) where F <: Union{MOI.SingleVariable,
-                                            MOI.VectorOfVariables}
-
-Return the dual of the constraint of index `ci` for which the value of the
-`MOI.ConstraintFunction` attribute is `func`.
-"""
-function variable_dual(
-    model::MOI.ModelLike,
-    attr::MOI.ConstraintDual,
-    ci::MOI.ConstraintIndex{MOI.SingleVariable},
-    func::MOI.SingleVariable,
-)
-    return variable_dual(model, attr, ci, func.variable)
-end
 function variable_dual(
     model::MOI.ModelLike,
     attr::MOI.ConstraintDual,
@@ -472,20 +465,21 @@ end
 
 """
     get_fallback(model::MOI.ModelLike, attr::MOI.ConstraintDual,
-                 ci::MOI.ConstraintIndex{Union{MOI.SingleVariable,
+                 ci::MOI.ConstraintIndex{Union{MOI.VariableIndex,
                                                MOI.VectorOfVariables}})
 
 Compute the dual of the constraint of index `ci` using the `ConstraintDual` of
 other constraints and the `ConstraintFunction` values. Throws an error if some
-constraints are quadratic or if there is one another `MOI.SingleVariable`-in-`S`
+constraints are quadratic or if there is one another `MOI.VariableIndex`-in-`S`
 or `MOI.VectorOfVariables`-in-`S` constraint with one of the variables in the
 function of the constraint `ci`.
 """
 function get_fallback(
     model::MOI.ModelLike,
     attr::MOI.ConstraintDual,
-    ci::MOI.ConstraintIndex{<:Union{MOI.SingleVariable,MOI.VectorOfVariables}},
+    ci::MOI.ConstraintIndex{<:Union{MOI.VariableIndex,MOI.VectorOfVariables}},
 )
+    MOI.check_result_index_bounds(model, attr)
     func = MOI.get(model, MOI.ConstraintFunction(), ci)
     return variable_dual(model, attr, ci, func)
 end
@@ -529,9 +523,9 @@ function triangle_dot(
         for j in 1:i
             k += 1
             if i == j
-                result = MA.add_mul!(result, x[k], y[k])
+                result = MA.add_mul!!(result, x[k], y[k])
             else
-                result = MA.add_mul!(result, 2, x[k], y[k])
+                result = MA.add_mul!!(result, 2, x[k], y[k])
             end
         end
     end

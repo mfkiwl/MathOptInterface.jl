@@ -36,6 +36,20 @@ function MOIB.is_bridged(
     return false
 end
 
+MOIB.is_bridged(::SingleBridgeOptimizer, ::MOI.VariableIndex) = false
+function MOIB.is_bridged(
+    ::SingleBridgeOptimizer,
+    ::MOI.ConstraintIndex{MOI.VariableIndex},
+)
+    return false
+end
+function MOIB.is_bridged(
+    ::SingleBridgeOptimizer,
+    ::MOI.ConstraintIndex{MOI.VectorOfVariables},
+)
+    return false
+end
+
 function MOIB.supports_bridging_objective_function(
     ::SingleBridgeOptimizer{BT},
     F::Type{<:MOI.AbstractScalarFunction},
@@ -56,3 +70,5 @@ function MOIB.bridge_type(
 ) where {BT}
     return BT
 end
+
+MOIB.recursive_model(b::SingleBridgeOptimizer) = b.model

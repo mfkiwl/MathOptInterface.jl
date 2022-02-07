@@ -16,13 +16,14 @@ is equivalent to
 ```
 with ``t \\ge 0``.  (3)
 
-*WARNING* This transformation starts from a convex constraint (1) and creates a
-non-convex constraint (2), because the Q matrix associated with the constraint 2
-has one negative eigenvalue. This might be wrongly interpreted by a solver.
-Some solvers can look at (2) and understand that it is a second order cone, but
-this is not a general rule.
-For these reasons this bridge is not automatically added by [`MOI.Bridges.full_bridge_optimizer`](@ref).
-Care is recommended when adding this bridge to a optimizer.
+!!! warning
+    This transformation starts from a convex constraint (1) and creates a
+    non-convex constraint (2), because the Q matrix associated with the constraint (2)
+    has one negative eigenvalue. This might be wrongly interpreted by a solver.
+    Some solvers can look at (2) and understand that it is a second order cone, but
+    this is not a general rule.
+    For these reasons this bridge is not automatically added by [`MOI.Bridges.full_bridge_optimizer`](@ref).
+    Care is recommended when adding this bridge to a optimizer.
 """
 struct SOCtoNonConvexQuadBridge{T} <: AbstractSOCtoNonConvexQuadBridge{T}
     quad::CI{MOI.ScalarQuadraticFunction{T},MOI.LessThan{T}}
@@ -47,13 +48,13 @@ function bridge_constraint(
         push!(q_terms, MOI.ScalarQuadraticTerm(T(2), var, var))
     end
 
-    fq = MOI.ScalarQuadraticFunction(a_terms, q_terms, zero(T))
+    fq = MOI.ScalarQuadraticFunction(q_terms, a_terms, zero(T))
     quad = MOI.add_constraint(model, fq, MOI.LessThan(zero(T)))
-    # ScalarAffineFunction's are added instead of SingleVariable's
-    # because models can only have one SingleVariable per variable.
-    # Hence, adding a SingleVariable constraint here could conflict with
-    # a user defined SingleVariable
-    fp = convert(MOI.ScalarAffineFunction{T}, MOI.SingleVariable(t))
+    # ScalarAffineFunction's are added instead of VariableIndex's
+    # because models can only have one VariableIndex per variable.
+    # Hence, adding a VariableIndex constraint here could conflict with
+    # a user defined VariableIndex
+    fp = convert(MOI.ScalarAffineFunction{T}, t)
     var_pos = MOI.add_constraint(model, fp, MOI.GreaterThan(zero(T)))
 
     return SOCtoNonConvexQuadBridge(quad, [var_pos], vis)
@@ -107,15 +108,15 @@ function bridge_constraint(
         push!(q_terms, MOI.ScalarQuadraticTerm(T(2), var, var))
     end
 
-    fq = MOI.ScalarQuadraticFunction(a_terms, q_terms, zero(T))
+    fq = MOI.ScalarQuadraticFunction(q_terms, a_terms, zero(T))
     quad = MOI.add_constraint(model, fq, MOI.LessThan(zero(T)))
-    # ScalarAffineFunction's are added instead of SingleVariable's
-    # because models can only have one SingleVariable per variable.
-    # Hence, adding a SingleVariable constraint here could conflict with
-    # a user defined SingleVariable
-    fp1 = convert(MOI.ScalarAffineFunction{T}, MOI.SingleVariable(t))
+    # ScalarAffineFunction's are added instead of VariableIndex's
+    # because models can only have one VariableIndex per variable.
+    # Hence, adding a VariableIndex constraint here could conflict with
+    # a user defined VariableIndex
+    fp1 = convert(MOI.ScalarAffineFunction{T}, t)
     var_pos1 = MOI.add_constraint(model, fp1, MOI.GreaterThan(zero(T)))
-    fp2 = convert(MOI.ScalarAffineFunction{T}, MOI.SingleVariable(u))
+    fp2 = convert(MOI.ScalarAffineFunction{T}, u)
     var_pos2 = MOI.add_constraint(model, fp2, MOI.GreaterThan(zero(T)))
 
     return RSOCtoNonConvexQuadBridge(quad, [var_pos1, var_pos2], vis)
@@ -140,13 +141,13 @@ end
 function MOIB.added_constrained_variable_types(
     ::Type{<:AbstractSOCtoNonConvexQuadBridge},
 )
-    return Tuple{DataType}[]
+    return Tuple{Type}[]
 end
 
 function MOIB.added_constraint_types(
     ::Type{<:AbstractSOCtoNonConvexQuadBridge{T}},
 ) where {T}
-    return [
+    return Tuple{Type,Type}[
         (MOI.ScalarQuadraticFunction{T}, MOI.LessThan{T}),
         (MOI.ScalarAffineFunction{T}, MOI.GreaterThan{T}),
     ]
@@ -172,7 +173,7 @@ end
 function MOI.get(
     ::AbstractSOCtoNonConvexQuadBridge{T},
     ::MOI.NumberOfConstraints{MOI.ScalarQuadraticFunction{T},MOI.LessThan{T}},
-) where {T}
+)::Int64 where {T}
     return 1
 end
 
@@ -189,7 +190,7 @@ end
 function MOI.get(
     bridge::AbstractSOCtoNonConvexQuadBridge{T},
     ::MOI.NumberOfConstraints{MOI.ScalarAffineFunction{T},MOI.GreaterThan{T}},
-) where {T}
+)::Int64 where {T}
     return length(bridge.var_pos)
 end
 

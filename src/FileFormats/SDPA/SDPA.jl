@@ -21,20 +21,20 @@ MOI.Utilities.@model(
 
 function MOI.supports_constraint(
     ::Model{T},
-    ::Type{MOI.SingleVariable},
+    ::Type{MOI.VariableIndex},
     ::Type{<:MOI.Utilities.SUPPORTED_VARIABLE_SCALAR_SETS{T}},
 ) where {T}
     return false
 end
 function MOI.supports_constraint(
     ::Model,
-    ::Type{MOI.SingleVariable},
+    ::Type{MOI.VariableIndex},
     ::Type{MOI.Integer},
 )
     return true
 end
 
-function MOI.supports(::Model, ::MOI.ObjectiveFunction{MOI.SingleVariable})
+function MOI.supports(::Model, ::MOI.ObjectiveFunction{MOI.VariableIndex})
     return false
 end
 
@@ -164,10 +164,8 @@ function Base.write(io::IO, model::Model{T}) where {T}
     end
     println(io)
 
-    index_map = Vector{Tuple{Int,Int}}(
-        undef,
-        MOI.dimension(MOI.PositiveSemidefiniteConeTriangle(max_dim)),
-    )
+    max_index_dim = MOI.dimension(MOI.PositiveSemidefiniteConeTriangle(max_dim))
+    index_map = Vector{Tuple{Int,Int}}(undef, max_index_dim)
     k = 0
     for col in 1:max_dim
         for row in 1:col
@@ -211,11 +209,11 @@ function Base.write(io::IO, model::Model{T}) where {T}
 
     # Integrality constraints.
     # Based on the extension: http://www.opt.tu-darmstadt.de/scipsdp/downloads/data_format.txt
-    integer_cons = model_cons(MOI.SingleVariable, MOI.Integer)
+    integer_cons = model_cons(MOI.VariableIndex, MOI.Integer)
     if length(integer_cons) > 0
         println(io, "*INTEGER")
         for con_idx in integer_cons
-            println(io, "*$(con_function(con_idx).variable.value)")
+            println(io, "*$(con_function(con_idx).value)")
         end
     end
     return
@@ -382,11 +380,7 @@ function Base.read!(io::IO, model::Model{T}) where {T}
         MOI.add_constraint(model, funcs[block], block_sets[block])
     end
     for var_idx in intvar_idx
-        MOI.add_constraint(
-            model,
-            MOI.SingleVariable(scalar_vars[var_idx]),
-            MOI.Integer(),
-        )
+        MOI.add_constraint(model, scalar_vars[var_idx], MOI.Integer())
     end
     return
 end

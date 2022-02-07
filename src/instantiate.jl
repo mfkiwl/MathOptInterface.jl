@@ -11,7 +11,7 @@ struct OptimizerWithAttributes
     # Function that takes zero arguments and returns a new optimizer.
     # The type of the function could be
     # * `Function`: a function, or
-    # * `DataType`: a type, or
+    # * `Type`: a type, or
     # * `UnionAll`: a type with missing parameters.
     optimizer_constructor::Any
     params::Vector{Pair{AbstractOptimizerAttribute,Any}}
@@ -96,7 +96,6 @@ end
     instantiate(
         optimizer_constructor,
         with_bridge_type::Union{Nothing, Type} = nothing,
-        with_names::Bool = false,
     )
 
 Creates an instance of optimizer by either:
@@ -109,22 +108,18 @@ If `with_bridge_type` is not `nothing`, it enables all the bridges defined in
 the MathOptInterface.Bridges submodule with coefficient type `with_bridge_type`.
 
 If the optimizer created by `optimizer_constructor` does not support loading the
-problem incrementally (see [`supports_incremental_interface`](@ref)), or does
-not support names and `with_names` is `true`, then a
+problem incrementally (see [`supports_incremental_interface`](@ref)), then a
 [`Utilities.CachingOptimizer`](@ref) is added to store a cache of the bridged
-model. Hence set `with_names` to `true` if names might be set.
-The cache used is instantiated with [`default_cache`](@ref).
 """
 function instantiate(
     optimizer_constructor;
     with_bridge_type::Union{Nothing,Type} = nothing,
-    with_names::Bool = false,
 )
     optimizer = _instantiate_and_check(optimizer_constructor)
     if with_bridge_type === nothing
         return optimizer
     end
-    if !supports_incremental_interface(optimizer, with_names)
+    if !supports_incremental_interface(optimizer)
         cache = default_cache(optimizer, with_bridge_type)
         optimizer = Utilities.CachingOptimizer(cache, optimizer)
     end

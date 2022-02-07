@@ -33,11 +33,11 @@ end
 function MOIB.added_constrained_variable_types(
     ::Type{VectorizeBridge{T,S}},
 ) where {T,S}
-    return [(S,)]
+    return Tuple{Type}[(S,)]
 end
 
 function MOIB.added_constraint_types(::Type{<:VectorizeBridge})
-    return Tuple{DataType,DataType}[]
+    return Tuple{Type,Type}[]
 end
 
 function concrete_bridge_type(
@@ -48,9 +48,7 @@ function concrete_bridge_type(
 end
 
 # Attributes, Bridge acting as a model
-function MOI.get(::VectorizeBridge, ::MOI.NumberOfVariables)
-    return 1
-end
+MOI.get(::VectorizeBridge, ::MOI.NumberOfVariables)::Int64 = 1
 
 function MOI.get(bridge::VectorizeBridge, ::MOI.ListOfVariableIndices)
     return [bridge.variable]
@@ -59,7 +57,7 @@ end
 function MOI.get(
     ::VectorizeBridge{T,S},
     ::MOI.NumberOfConstraints{MOI.VectorOfVariables,S},
-) where {T,S}
+)::Int64 where {T,S}
     return 1
 end
 
@@ -165,14 +163,13 @@ function MOI.set(
 end
 
 function MOIB.bridged_function(bridge::VectorizeBridge{T}) where {T}
-    func = MOI.SingleVariable(bridge.variable)
-    return MOIU.operate(+, T, func, bridge.set_constant)
+    return MOIU.operate(+, T, bridge.variable, bridge.set_constant)
 end
 
 function unbridged_map(
     bridge::VectorizeBridge{T},
     vi::MOI.VariableIndex,
 ) where {T}
-    func = MOIU.operate(-, T, MOI.SingleVariable(vi), bridge.set_constant)
+    func = MOIU.operate(-, T, vi, bridge.set_constant)
     return (bridge.variable => func,)
 end

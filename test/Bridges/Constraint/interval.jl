@@ -1,109 +1,130 @@
+module TestConstraintSplitInterval
+
 using Test
 
 using MathOptInterface
 const MOI = MathOptInterface
-const MOIT = MathOptInterface.Test
-const MOIU = MathOptInterface.Utilities
-const MOIB = MathOptInterface.Bridges
+
+function runtests()
+    for name in names(@__MODULE__; all = true)
+        if startswith("$(name)", "test_")
+            @testset "$(name)" begin
+                getfield(@__MODULE__, name)()
+            end
+        end
+    end
+    return
+end
 
 include("../utilities.jl")
 
-mock = MOIU.MockOptimizer(MOIU.UniversalFallback(MOIU.Model{Float64}()))
-config = MOIT.Config()
-config_with_basis = MOIT.Config(basis = true)
-
-@testset "Split" begin
+function test_split_basic()
+    mock = MOI.Utilities.MockOptimizer(
+        MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}()),
+    )
+    config = MOI.Test.Config()
     T = Float64
-    bridged_mock = MOIB.Constraint.SplitInterval{T}(mock)
-    MOIT.basic_constraint_tests(
+    bridged_mock = MOI.Bridges.Constraint.SplitInterval{T}(mock)
+    MOI.Test.runtests(
         bridged_mock,
         config,
         include = [
-            (MOI.SingleVariable, MOI.Interval{T}),
-            (MOI.ScalarAffineFunction{T}, MOI.Interval{T}),
-            (MOI.ScalarQuadraticFunction{T}, MOI.Interval{T}),
-            (MOI.SingleVariable, MOI.EqualTo{T}),
-            (MOI.ScalarAffineFunction{T}, MOI.EqualTo{T}),
-            (MOI.ScalarQuadraticFunction{T}, MOI.EqualTo{T}),
-            (MOI.VectorOfVariables, MOI.Zeros),
-            (MOI.VectorAffineFunction{T}, MOI.Zeros),
-            (MOI.VectorQuadraticFunction{T}, MOI.Zeros),
+            "test_basic_$(F)_$(S)" for F in [
+                "VariableIndex",
+                "ScalarAffineFunction",
+                "ScalarQuadraticFunction",
+            ] for S in ["Interval", "EqualTo"]
         ],
     )
+    MOI.Test.runtests(
+        bridged_mock,
+        config,
+        include = [
+            "test_basic_$(F)_Zeros" for F in [
+                "VectorOfVariables",
+                "VectorAffineFunction",
+                "VectorQuadraticFunction",
+            ]
+        ],
+    )
+    return
 end
 
-@testset "Interval" begin
-    bridged_mock = MOIB.Constraint.SplitInterval{Float64}(mock)
-    MOIU.set_mock_optimize!(
+function test_linear_integration_Interval()
+    mock = MOI.Utilities.MockOptimizer(
+        MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}()),
+    )
+    bridged_mock = MOI.Bridges.Constraint.SplitInterval{Float64}(mock)
+    config = MOI.Test.Config()
+    MOI.Utilities.set_mock_optimize!(
         mock,
-        (mock::MOIU.MockOptimizer) -> MOIU.mock_optimize!(
+        (mock::MOI.Utilities.MockOptimizer) -> MOI.Utilities.mock_optimize!(
             mock,
             [5.0, 5.0],
-            con_basis = [
+            constraint_basis_status = [
                 (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}) => [MOI.BASIC],
                 (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}) => [MOI.NONBASIC],
-                (MOI.SingleVariable, MOI.GreaterThan{Float64}) =>
-                    [MOI.BASIC, MOI.BASIC],
             ],
+            variable_basis_status = [MOI.BASIC, MOI.BASIC],
             (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}) =>
                 [0],
             (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}) =>
                 [-1],
         ),
-        (mock::MOIU.MockOptimizer) -> MOIU.mock_optimize!(
+        (mock::MOI.Utilities.MockOptimizer) -> MOI.Utilities.mock_optimize!(
             mock,
             [2.5, 2.5],
-            con_basis = [
+            constraint_basis_status = [
                 (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}) => [MOI.NONBASIC],
                 (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}) => [MOI.BASIC],
-                (MOI.SingleVariable, MOI.GreaterThan{Float64}) =>
-                    [MOI.BASIC, MOI.BASIC],
             ],
+            variable_basis_status = [MOI.BASIC, MOI.BASIC],
             (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}) =>
                 [1],
             (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}) =>
                 [0],
         ),
-        (mock::MOIU.MockOptimizer) -> MOIU.mock_optimize!(
+        (mock::MOI.Utilities.MockOptimizer) -> MOI.Utilities.mock_optimize!(
             mock,
             [1.0, 1.0],
             (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}) =>
                 [1],
             (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}) =>
                 [0],
-            con_basis = [
+            constraint_basis_status = [
                 (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}) => [MOI.NONBASIC],
                 (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}) => [MOI.BASIC],
-                (MOI.SingleVariable, MOI.GreaterThan{Float64}) =>
-                    [MOI.BASIC, MOI.BASIC],
             ],
+            variable_basis_status = [MOI.BASIC, MOI.BASIC],
         ),
-        (mock::MOIU.MockOptimizer) -> MOIU.mock_optimize!(
+        (mock::MOI.Utilities.MockOptimizer) -> MOI.Utilities.mock_optimize!(
             mock,
             [6.0, 6.0],
-            con_basis = [
+            constraint_basis_status = [
                 (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}) => [MOI.BASIC],
                 (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}) => [MOI.NONBASIC],
-                (MOI.SingleVariable, MOI.GreaterThan{Float64}) =>
-                    [MOI.BASIC, MOI.BASIC],
             ],
+            variable_basis_status = [MOI.BASIC, MOI.BASIC],
         ),
     )
-    MOIT.linear10test(bridged_mock, config_with_basis)
-    MOIU.set_mock_optimize!(
+    MOI.Test.test_linear_integration_Interval(bridged_mock, config)
+    MOI.empty!(bridged_mock)
+    MOI.Utilities.set_mock_optimize!(
         mock,
-        (mock::MOIU.MockOptimizer) -> MOIU.mock_optimize!(
+        (mock::MOI.Utilities.MockOptimizer) -> MOI.Utilities.mock_optimize!(
             mock,
             [0.0, 0.0],
             (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}) =>
                 [0],
             (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}) =>
                 [-1],
-            con_basis = [
+            constraint_basis_status = [
                 (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}) => [MOI.BASIC],
                 (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}) => [MOI.BASIC],
-                (MOI.SingleVariable, MOI.GreaterThan{Float64}) =>
-                    [MOI.NONBASIC, MOI.NONBASIC],
+            ],
+            variable_basis_status = [
+                MOI.NONBASIC_AT_LOWER,
+                MOI.NONBASIC_AT_LOWER,
             ],
             (MOI.ScalarAffineFunction{Float64}, MOI.GreaterThan{Float64}) =>
                 [0],
@@ -111,8 +132,7 @@ end
                 [0],
         ),
     )
-    MOIT.linear10btest(bridged_mock, config_with_basis)
-
+    MOI.Test.test_linear_Interval_inactive(bridged_mock, config)
     ci = first(
         MOI.get(
             bridged_mock,
@@ -132,15 +152,11 @@ end
     modified_f =
         MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(ones(2), vis), 0.0)
     @test MOI.get(bridged_mock, MOI.ConstraintFunction(), ci) ≈ modified_f
-
-    @testset "$attr" for attr in [
-        MOI.ConstraintPrimalStart(),
-        MOI.ConstraintDualStart(),
-    ]
+    for attr in [MOI.ConstraintPrimalStart(), MOI.ConstraintDualStart()]
         @test MOI.supports(bridged_mock, attr, typeof(ci))
         MOI.set(bridged_mock, attr, ci, 2.0)
         @test MOI.get(bridged_mock, attr, ci) == 2.0
-        bridge = MOIB.bridge(bridged_mock, ci)
+        bridge = MOI.Bridges.bridge(bridged_mock, ci)
         if attr isa MOI.ConstraintPrimalStart
             @test MOI.get(bridged_mock, attr, bridge.lower) == 2.0
             @test MOI.get(bridged_mock, attr, bridge.upper) == 2.0
@@ -158,8 +174,7 @@ end
             @test MOI.get(bridged_mock, attr, bridge.upper) == -2.0
         end
     end
-
-    test_delete_bridge(
+    _test_delete_bridge(
         bridged_mock,
         ci,
         2,
@@ -168,12 +183,17 @@ end
             (MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}, 0),
         ),
     )
+    return
 end
-@testset "EqualTo{$T}" for T in [Float64, Int]
-    bridged_mock = MOIB.Constraint.SplitInterval{T}(mock)
-    MOIU.set_mock_optimize!(
+
+function _test_linear_FEASIBILITY_SENSE(T)
+    mock = MOI.Utilities.MockOptimizer(
+        MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}()),
+    )
+    bridged_mock = MOI.Bridges.Constraint.SplitInterval{T}(mock)
+    MOI.Utilities.set_mock_optimize!(
         mock,
-        (mock::MOIU.MockOptimizer) -> MOIU.mock_optimize!(
+        (mock::MOI.Utilities.MockOptimizer) -> MOI.Utilities.mock_optimize!(
             mock,
             [one(T), one(T)],
             (MOI.ScalarAffineFunction{T}, MOI.GreaterThan{T}) =>
@@ -181,8 +201,7 @@ end
             (MOI.ScalarAffineFunction{T}, MOI.LessThan{T}) => zeros(T, 1),
         ),
     )
-    MOIT.linear13test(bridged_mock, MOIT.Config{T}())
-
+    MOI.Test.test_linear_FEASIBILITY_SENSE(bridged_mock, MOI.Test.Config(T))
     ci = first(
         MOI.get(
             bridged_mock,
@@ -192,8 +211,7 @@ end
             }(),
         ),
     )
-
-    test_delete_bridge(
+    _test_delete_bridge(
         bridged_mock,
         ci,
         2,
@@ -202,11 +220,23 @@ end
             (MOI.ScalarAffineFunction{T}, MOI.LessThan{T}, 0),
         ),
     )
+    return
 end
-@testset "Zeros" begin
-    bridged_mock = MOIB.Constraint.SplitInterval{Float64}(mock)
+
+function test_linear_FEASIBILITY_SENSE()
+    _test_linear_FEASIBILITY_SENSE(Float64)
+    _test_linear_FEASIBILITY_SENSE(Int)
+    return
+end
+
+function test_conic_linear_VectorOfVariables()
+    mock = MOI.Utilities.MockOptimizer(
+        MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}()),
+    )
+    config = MOI.Test.Config()
+    bridged_mock = MOI.Bridges.Constraint.SplitInterval{Float64}(mock)
     mock.optimize! =
-        (mock::MOIU.MockOptimizer) -> MOIU.mock_optimize!(
+        (mock::MOI.Utilities.MockOptimizer) -> MOI.Utilities.mock_optimize!(
             mock,
             [1.0, 0.0, 2.0],
             (MOI.VectorAffineFunction{Float64}, MOI.Nonnegatives) =>
@@ -214,8 +244,7 @@ end
             (MOI.VectorAffineFunction{Float64}, MOI.Nonpositives) =>
                 [[-3, -1]],
         )
-    MOIT.lin1vtest(bridged_mock, config)
-
+    MOI.Test.test_conic_linear_VectorOfVariables(bridged_mock, config)
     ci = first(
         MOI.get(
             bridged_mock,
@@ -225,8 +254,7 @@ end
             }(),
         ),
     )
-
-    test_delete_bridge(
+    _test_delete_bridge(
         bridged_mock,
         ci,
         3,
@@ -235,4 +263,110 @@ end
             (MOI.VectorAffineFunction{Float64}, MOI.Nonpositives, 0),
         ),
     )
+    return
 end
+
+function _test_interval(
+    mock,
+    bridged_mock,
+    set::MOI.Interval{T},
+    ci::MOI.ConstraintIndex{MOI.VariableIndex,MOI.Interval{T}},
+) where {T}
+    haslb = set.lower != typemin(T)
+    hasub = set.upper != typemax(T)
+    @test MOI.Bridges.is_bridged(bridged_mock, ci)
+    bridge = MOI.Bridges.bridge(bridged_mock, ci)
+    if haslb
+        @test bridge.lower !== nothing
+        MOI.set(mock, MOI.ConstraintBasisStatus(), bridge.lower, MOI.BASIC)
+    else
+        @test bridge.lower === nothing
+    end
+    if hasub
+        @test bridge.upper !== nothing
+        MOI.set(mock, MOI.ConstraintBasisStatus(), bridge.upper, MOI.BASIC)
+    else
+        @test bridge.upper === nothing
+    end
+    @test set == MOI.get(bridged_mock, MOI.ConstraintSet(), ci)
+    attr = MOI.NumberOfConstraints{MOI.VariableIndex,MOI.GreaterThan{T}}()
+    @test 0 == MOI.get(bridged_mock, attr)
+    @test (haslb ? 1 : 0) == MOI.get(mock, attr)
+    attr = MOI.NumberOfConstraints{MOI.VariableIndex,MOI.LessThan{T}}()
+    @test 0 == MOI.get(bridged_mock, attr)
+    @test (hasub ? 1 : 0) == MOI.get(mock, attr)
+    attr = MOI.ListOfConstraintIndices{MOI.VariableIndex,MOI.GreaterThan{T}}()
+    @test isempty(MOI.get(bridged_mock, attr))
+    @test (haslb ? 1 : 0) == length(MOI.get(mock, attr))
+    attr = MOI.ListOfConstraintIndices{MOI.VariableIndex,MOI.LessThan{T}}()
+    @test isempty(MOI.get(bridged_mock, attr))
+    @test (hasub ? 1 : 0) == length(MOI.get(mock, attr))
+    if haslb || hasub
+        @test one(T) == MOI.get(bridged_mock, MOI.ConstraintPrimal(), ci)
+        @test MOI.BASIC ==
+              MOI.get(bridged_mock, MOI.ConstraintBasisStatus(), ci)
+        for attr in [MOI.ConstraintPrimalStart(), MOI.ConstraintDualStart()]
+            MOI.set(bridged_mock, attr, ci, T(2))
+            @test T(2) == MOI.get(bridged_mock, attr, ci)
+        end
+    else
+        for attr in [
+            MOI.ConstraintPrimal(),
+            MOI.ConstraintPrimalStart(),
+            MOI.ConstraintBasisStatus(),
+        ]
+            err = ErrorException(
+                "Cannot get `$attr` for a constraint " *
+                "in the interval `[-Inf, Inf]`.",
+            )
+            @test_throws err MOI.get(bridged_mock, attr, ci)
+        end
+        @test zero(T) == MOI.get(bridged_mock, MOI.ConstraintDualStart(), ci)
+    end
+    @test zero(T) == MOI.get(bridged_mock, MOI.ConstraintDual(), ci)
+end
+
+function test_infinite_bounds(::Type{T} = Float64) where {T<:AbstractFloat}
+    mock = MOI.Utilities.MockOptimizer(
+        MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}()),
+    )
+    bridged_mock = MOI.Bridges.Constraint.SplitInterval{T}(mock)
+    x = MOI.add_variable(bridged_mock)
+    MOI.set(mock, MOI.VariablePrimal(), x, one(T))
+    set = MOI.Interval(typemin(T), one(T))
+    ci = MOI.add_constraint(bridged_mock, x, set)
+    _test_interval(mock, bridged_mock, set, ci)
+    set = MOI.Interval(zero(T), typemax(T))
+    MOI.set(bridged_mock, MOI.ConstraintSet(), ci, set)
+    _test_interval(mock, bridged_mock, set, ci)
+    set = MOI.Interval(typemin(T), typemax(T))
+    MOI.set(bridged_mock, MOI.ConstraintSet(), ci, set)
+    _test_interval(mock, bridged_mock, set, ci)
+    _test_delete_bridge(
+        bridged_mock,
+        ci,
+        1,
+        (
+            (MOI.VariableIndex, MOI.GreaterThan{T}, 0),
+            (MOI.VariableIndex, MOI.LessThan{T}, 0),
+        ),
+    )
+    ci = MOI.add_constraint(bridged_mock, x, set)
+    _test_interval(mock, bridged_mock, set, ci)
+    _test_delete_bridge(
+        bridged_mock,
+        ci,
+        1,
+        (
+            (MOI.VariableIndex, MOI.GreaterThan{T}, 0),
+            (MOI.VariableIndex, MOI.LessThan{T}, 0),
+        ),
+    )
+    set = MOI.Interval(zero(T), typemax(T))
+    ci = MOI.add_constraint(bridged_mock, x, set)
+    return _test_interval(mock, bridged_mock, set, ci)
+end
+
+end  # module
+
+TestConstraintSplitInterval.runtests()

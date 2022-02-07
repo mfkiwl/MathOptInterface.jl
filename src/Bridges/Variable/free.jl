@@ -26,15 +26,15 @@ function supports_constrained_variable(::Type{<:FreeBridge}, ::Type{MOI.Reals})
 end
 
 function MOIB.added_constrained_variable_types(::Type{<:FreeBridge})
-    return [(MOI.Nonnegatives,)]
+    return Tuple{Type}[(MOI.Nonnegatives,)]
 end
 
 function MOIB.added_constraint_types(::Type{FreeBridge{T}}) where {T}
-    return Tuple{DataType,DataType}[]
+    return Tuple{Type,Type}[]
 end
 
 # Attributes, Bridge acting as a model
-function MOI.get(bridge::FreeBridge, ::MOI.NumberOfVariables)
+function MOI.get(bridge::FreeBridge, ::MOI.NumberOfVariables)::Int64
     return length(bridge.variables)
 end
 
@@ -45,7 +45,7 @@ end
 function MOI.get(
     ::FreeBridge,
     ::MOI.NumberOfConstraints{MOI.VectorOfVariables,MOI.Nonnegatives},
-)
+)::Int64
     return 1
 end
 
@@ -120,8 +120,8 @@ function MOIB.bridged_function(
     return MOIU.operate(
         -,
         T,
-        MOI.SingleVariable(bridge.variables[i.value]),
-        MOI.SingleVariable(bridge.variables[n+i.value]),
+        bridge.variables[i.value],
+        bridge.variables[n+i.value],
     )
 end
 
@@ -132,12 +132,11 @@ function unbridged_map(
     vi::MOI.VariableIndex,
     i::MOIB.IndexInVector,
 ) where {T}
-    sv = MOI.SingleVariable(vi)
     # `unbridged_map` is required to return a `MOI.ScalarAffineFunction`.
-    func = convert(MOI.ScalarAffineFunction{T}, sv)
+    func = convert(MOI.ScalarAffineFunction{T}, vi)
     n = div(length(bridge.variables), 2)
-    return bridge.variables[i.value] => func,
-    bridge.variables[n+i.value] => zero(MOI.ScalarAffineFunction{T})
+    return bridge.variables[i.value] =>
+        func, bridge.variables[n+i.value] => zero(MOI.ScalarAffineFunction{T})
 end
 
 function MOI.supports(

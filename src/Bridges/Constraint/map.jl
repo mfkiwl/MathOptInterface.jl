@@ -8,22 +8,19 @@ struct Map <: AbstractDict{MOI.ConstraintIndex,AbstractBridge}
     # It is set to `nothing` when the constraint is deleted.
     bridges::Vector{Union{Nothing,AbstractBridge}}
     # Constraint Index of bridged constraint -> Constraint type.
-    constraint_types::Vector{Tuple{DataType,DataType}}
+    constraint_types::Vector{Tuple{Type,Type}}
     # The order of the keys is used in `keys_of_type` which is used by
     # `ListOfConstraintIndices`. Therefore they need to be in the order
     # of creation so we need `OrderedDict` and not `Dict`.
-    # For `SingleVariable` constraints: (variable, set type) -> bridge
-    single_variable_constraints::OrderedDict{
-        Tuple{Int64,DataType},
-        AbstractBridge,
-    }
+    # For `VariableIndex` constraints: (variable, set type) -> bridge
+    single_variable_constraints::OrderedDict{Tuple{Int64,Type},AbstractBridge}
 end
 
 function Map()
     return Map(
         Union{Nothing,AbstractBridge}[],
-        Tuple{DataType,DataType}[],
-        OrderedDict{Tuple{Int64,DataType},AbstractBridge}(),
+        Tuple{Type,Type}[],
+        OrderedDict{Tuple{Int64,Type},AbstractBridge}(),
     )
 end
 
@@ -59,14 +56,14 @@ end
 
 function Base.haskey(
     map::Map,
-    ci::MOI.ConstraintIndex{MOI.SingleVariable,S},
+    ci::MOI.ConstraintIndex{MOI.VariableIndex,S},
 ) where {S}
     return haskey(map.single_variable_constraints, (ci.value, S))
 end
 
 function Base.getindex(
     map::Map,
-    ci::MOI.ConstraintIndex{MOI.SingleVariable,S},
+    ci::MOI.ConstraintIndex{MOI.VariableIndex,S},
 ) where {S}
     return map.single_variable_constraints[(ci.value, S)]
 end
@@ -78,7 +75,7 @@ end
 
 function Base.delete!(
     map::Map,
-    ci::MOI.ConstraintIndex{MOI.SingleVariable,S},
+    ci::MOI.ConstraintIndex{MOI.VariableIndex,S},
 ) where {S}
     delete!(map.single_variable_constraints, (ci.value, S))
     return map
@@ -92,8 +89,8 @@ function Base.values(map::Map)
     ))
 end
 
-# Implementation of iterate: it should combine non-`SingleVariable` constraints and
-# `SingleVariable` constraints.
+# Implementation of iterate: it should combine non-`VariableIndex` constraints and
+# `VariableIndex` constraints.
 function _iterate_sv(
     map::Map,
     elem_state = iterate(map.single_variable_constraints),
@@ -103,7 +100,7 @@ function _iterate_sv(
     else
         i, S = elem_state[1].first
         bridge = elem_state[1].second
-        ci = MOI.ConstraintIndex{MOI.SingleVariable,S}(i)
+        ci = MOI.ConstraintIndex{MOI.VariableIndex,S}(i)
         return ci => bridge, (2, elem_state[2])
     end
 end
@@ -170,14 +167,14 @@ end
 
 function number_of_type(
     map::Map,
-    C::Type{MOI.ConstraintIndex{MOI.SingleVariable,S}},
+    C::Type{MOI.ConstraintIndex{MOI.VariableIndex,S}},
 ) where {S}
     return count(key -> key[2] == S, keys(map.single_variable_constraints))
 end
 
 function keys_of_type(
     map::Map,
-    C::Type{MOI.ConstraintIndex{MOI.SingleVariable,S}},
+    C::Type{MOI.ConstraintIndex{MOI.VariableIndex,S}},
 ) where {S}
     return MOIU.LazyMap{C}(
         key -> C(key[1]),
@@ -194,14 +191,14 @@ end
 Return a list of all the different concrete type of keys in `map`.
 """
 function list_of_key_types(map::Map)
-    list = Set{Tuple{DataType,DataType}}()
+    list = Set{Tuple{Type,Type}}()
     for i in eachindex(map.bridges)
         if map.bridges[i] !== nothing
             push!(list, map.constraint_types[i])
         end
     end
     for key in keys(map.single_variable_constraints)
-        push!(list, (MOI.SingleVariable, key[2]))
+        push!(list, (MOI.VariableIndex, key[2]))
     end
     return list
 end
@@ -209,14 +206,14 @@ end
 """
     variable_constraints(map::Map, vi::MOI.VariableIndex)
 
-Return the list of all keys corresponding to [`MathOptInterface.SingleVariable`](@ref)
+Return the list of all keys corresponding to [`MathOptInterface.VariableIndex`](@ref)
 constraints on the variable `vi`.
 """
 function variable_constraints(map::Map, vi::MOI.VariableIndex)
-    cis = MOI.ConstraintIndex{MOI.SingleVariable}[]
+    cis = MOI.ConstraintIndex{MOI.VariableIndex}[]
     for key in keys(map.single_variable_constraints)
         if key[1] == vi.value
-            push!(cis, MOI.ConstraintIndex{MOI.SingleVariable,key[2]}(vi.value))
+            push!(cis, MOI.ConstraintIndex{MOI.VariableIndex,key[2]}(vi.value))
         end
     end
     return cis
@@ -275,13 +272,11 @@ end
 function add_key_for_bridge(
     map::Map,
     bridge::AbstractBridge,
-    func::MOI.SingleVariable,
+    func::MOI.VariableIndex,
     set::MOI.AbstractScalarSet,
 )
-    map.single_variable_constraints[(func.variable.value, typeof(set))] = bridge
-    return MOI.ConstraintIndex{MOI.SingleVariable,typeof(set)}(
-        func.variable.value,
-    )
+    map.single_variable_constraints[(func.value, typeof(set))] = bridge
+    return MOI.ConstraintIndex{MOI.VariableIndex,typeof(set)}(func.value)
 end
 
 """

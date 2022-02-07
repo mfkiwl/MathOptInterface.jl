@@ -11,15 +11,22 @@ DocTestFilters = [r"MathOptInterface|MOI"]
 
 When an MOI call fails on a model, precise errors should be thrown when possible
 instead of simply calling `error` with a message. The docstrings for the
-respective methods describe the errors that the implementation should thrown in
+respective methods describe the errors that the implementation should throw in
 certain situations. This error-reporting system allows code to distinguish
 between internal errors (that should be shown to the user) and unsupported
 operations which may have automatic workarounds.
 
-When an invalid index is used in an MOI call, an [`InvalidIndex`](@ref) should
-be thrown:
+When an invalid index is used in an MOI call, an [`InvalidIndex`](@ref) is
+thrown:
 ```@docs
 InvalidIndex
+```
+
+When an invalid result index is used to retrieve an attribute, a
+[`ResultIndexBoundsError`](@ref) is thrown:
+```@docs
+ResultIndexBoundsError
+check_result_index_bounds
 ```
 
 As discussed in [JuMP mapping](@ref), for scalar constraint with a nonzero
@@ -29,7 +36,7 @@ thrown:
 ScalarFunctionConstantNotZero
 ```
 
-Some [`SingleVariable`](@ref) constraints cannot be combined on the same
+Some [`VariableIndex`](@ref) constraints cannot be combined on the same
 variable:
 ```@docs
 LowerBoundAlreadySet
@@ -71,8 +78,8 @@ UnsupportedSubmittable
 SubmitNotAllowed
 ```
 
-Note that setting the [`ConstraintFunction`](@ref) of a [`SingleVariable`]
+Note that setting the [`ConstraintFunction`](@ref) of a [`VariableIndex`](@ref)
 constraint is not allowed:
 ```@docs
-SettingSingleVariableFunctionNotAllowed
+SettingVariableIndexNotAllowed
 ```

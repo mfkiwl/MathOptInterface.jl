@@ -22,7 +22,7 @@ function _set_var_and_con_names(model::MOI.ModelLike)
     single_variable_constraints = Tuple[]
     for i in MOI.get(
         model,
-        MOI.ListOfConstraintIndices{MOI.SingleVariable,MOI.Integer}(),
+        MOI.ListOfConstraintIndices{MOI.VariableIndex,MOI.Integer}(),
     )
         idx += 1
         x = MOI.get(model, MOI.VariableName(), MOI.VariableIndex(i.value))
@@ -72,7 +72,7 @@ function _test_write_then_read(model_string::String)
     MOI.read_from_file(model2, CBF_TEST_FILE)
     _set_var_and_con_names(model2)
 
-    return MOIU.test_models_equal(model1, model2, args...)
+    return MOI.Test.util_test_models_equal(model1, model2, args...)
 end
 
 function _test_read(filename::String, model_string::String)
@@ -84,7 +84,7 @@ function _test_read(filename::String, model_string::String)
     MOI.read_from_file(model2, filename)
     _set_var_and_con_names(model2)
 
-    return MOIU.test_models_equal(model1, model2, args...)
+    return MOI.Test.util_test_models_equal(model1, model2, args...)
 end
 
 function test_show()
@@ -107,7 +107,7 @@ function test_support_errors()
         x in $set
         """
         model = CBF.Model()
-        err = MOI.UnsupportedConstraint{MOI.SingleVariable,typeof(set)}
+        err = MOI.UnsupportedConstraint{MOI.VariableIndex,typeof(set)}
         @test_throws err MOIU.loadfromstring!(model, model_string)
     end
 end
@@ -115,9 +115,9 @@ end
 function test_read_nonempty()
     model = CBF.Model()
     MOI.add_variable(model)
-    @test_throws Exception MOI.read_from_file(
-        model,
-        joinpath(MODELS_DIR, "example1.cbf"),
+    @test_throws(
+        ErrorException("Cannot read in file because model is not empty."),
+        MOI.read_from_file(model, joinpath(MODELS_DIR, "example_A.cbf")),
     )
 end
 
@@ -170,21 +170,9 @@ function test_read_corrupt()
     end
 end
 
-function test_write_quadratic()
-    model = CBF.Model()
-    MOIU.loadfromstring!(
-        model,
-        """
-        variables: x
-        minobjective: 1 * x * x
-        """,
-    )
-    @test_throws Exception MOI.write_to_file(model, CBF_TEST_FILE)
-end
-
 const _WRITE_READ_MODELS = [
     (
-        "min SingleVariable",
+        "min VariableIndex",
         """
     variables: x
     minobjective: x
@@ -198,7 +186,7 @@ const _WRITE_READ_MODELS = [
 """,
     ),
     (
-        "max SingleVariable",
+        "max VariableIndex",
         """
     variables: x
     maxobjective: x
@@ -212,7 +200,7 @@ const _WRITE_READ_MODELS = [
 """,
     ),
     (
-        "SingleVariable in Integer",
+        "VariableIndex in Integer",
         """
     variables: x, y
     minobjective: 1.2x

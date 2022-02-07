@@ -15,6 +15,22 @@
 # vector, it readily gives the entries of `model.constrmap` that need to be
 # updated.
 
+"""
+    mutable struct VectorOfConstraints{
+        F<:MOI.AbstractFunction,
+        S<:MOI.AbstractSet,
+    } <: MOI.ModelLike
+        constraints::CleverDicts.CleverDict{
+            MOI.ConstraintIndex{F,S},
+            Tuple{F,S},
+            typeof(CleverDicts.key_to_index),
+            typeof(CleverDicts.index_to_key),
+        }
+    end
+
+A struct storing `F`-in-`S` constraints as a mapping between the constraint
+indices to the corresponding tuple of function and set.
+"""
 mutable struct VectorOfConstraints{
     F<:MOI.AbstractFunction,
     S<:MOI.AbstractSet,
@@ -117,14 +133,14 @@ end
 function MOI.get(
     v::VectorOfConstraints{F,S},
     ::MOI.ListOfConstraintTypesPresent,
-)::Vector{Tuple{DataType,DataType}} where {F,S}
+)::Vector{Tuple{Type,Type}} where {F,S}
     return isempty(v.constraints) ? [] : [(F, S)]
 end
 
 function MOI.get(
     v::VectorOfConstraints{F,S},
     ::MOI.NumberOfConstraints{F,S},
-) where {F,S}
+)::Int64 where {F,S}
     return length(v.constraints)
 end
 
@@ -146,6 +162,7 @@ function MOI.modify(
 end
 
 function _add_variable(::VectorOfConstraints) end
+function _add_variables(::VectorOfConstraints, ::Int64) end
 
 # Deletion of variables in vector of variables
 
@@ -173,6 +190,9 @@ end
 
 # Nothing to do as it's not `VectorOfVariables` constraints
 _throw_if_cannot_delete(::VectorOfConstraints, vis, fast_in_vis) = nothing
+
+_fast_in(vi1::MOI.VariableIndex, vi2::MOI.VariableIndex) = vi1 == vi2
+_fast_in(vi::MOI.VariableIndex, vis::Set{MOI.VariableIndex}) = vi in vis
 
 function _throw_if_cannot_delete(
     v::VectorOfConstraints{MOI.VectorOfVariables,S},

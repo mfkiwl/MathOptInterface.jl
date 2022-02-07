@@ -48,6 +48,19 @@ const AnyAttribute = Union{
 Base.broadcastable(attribute::AnyAttribute) = Ref(attribute)
 
 """
+    attribute_value_type(attr::AnyAttribute)
+
+Given an attribute `attr`, return the type of value expected by [`get`](@ref),
+or returned by [`set`](@ref).
+
+# Notes
+
+ * Only implement this if it make sense to do so. If un-implemented, the default
+   is `Any`.
+"""
+attribute_value_type(::AnyAttribute) = Any
+
+"""
     struct UnsupportedAttribute{AttrType} <: UnsupportedError
         attr::AttrType
         message::String
@@ -125,11 +138,32 @@ SubmitNotAllowed(sub::AbstractSubmittable) = SubmitNotAllowed(sub, "")
 operation_name(err::SubmitNotAllowed) = "Submitting $(err.sub)"
 message(err::SubmitNotAllowed) = err.message
 
+"""
+    struct ResultIndexBoundsError{AttrType} <: Exception
+        attr::AttrType
+        result_count::Int
+    end
+
+An error indicating that the requested attribute `attr` could not be retrieved,
+because the solver returned too few results compared to what was requested.
+For instance, the user tries to retrieve `VariablePrimal(2)` when only one
+solution is available, or when the model is infeasible and has no solution.
+
+See also: [`check_result_index_bounds`](@ref).
+"""
 struct ResultIndexBoundsError{AttrType} <: Exception
     attr::AttrType
     result_count::Int
 end
 
+"""
+    check_result_index_bounds(model::ModelLike, attr)
+
+This function checks whether enough results are available in the `model` for
+the requested `attr`, using its `result_index` field. If the model
+does not have sufficient results to answer the query, it throws a
+[`ResultIndexBoundsError`](@ref).
+"""
 function check_result_index_bounds(model::ModelLike, attr)
     result_count = get(model, ResultCount())
     if !(1 <= attr.result_index <= result_count)
@@ -295,10 +329,46 @@ end
 function get(model::ModelLike, attr::AnyAttribute, args...)
     return get_fallback(model, attr, args...)
 end
-function get_fallback(model::ModelLike, attr::AnyAttribute, args...)
+
+function get_fallback(
+    model::ModelLike,
+    attr::Union{AbstractModelAttribute,AbstractOptimizerAttribute},
+)
     return throw(
         ArgumentError(
-            "ModelLike of type $(typeof(model)) does not support accessing the attribute $attr",
+            "$(typeof(model)) does not support getting the attribute $(attr).",
+        ),
+    )
+end
+
+function get_fallback(
+    model::ModelLike,
+    attr::AbstractVariableAttribute,
+    ::VariableIndex,
+)
+    return throw(
+        ArgumentError(
+            "$(typeof(model)) does not support getting the attribute $(attr).",
+        ),
+    )
+end
+
+function get_fallback(
+    model::ModelLike,
+    attr::AbstractConstraintAttribute,
+    ::ConstraintIndex,
+)
+    return throw(
+        ArgumentError(
+            "$(typeof(model)) does not support getting the attribute $(attr).",
+        ),
+    )
+end
+
+function get_fallback(::ModelLike, attr::AnyAttribute, args...)
+    return throw(
+        ArgumentError(
+            "Unable to get attribute $(attr): invalid arguments $(args).",
         ),
     )
 end
@@ -306,16 +376,14 @@ end
 """
     get!(output, model::ModelLike, args...)
 
-An in-place version of `get`.
-The signature matches that of `get` except that the the result is placed in the vector `output`.
+An in-place version of [`get`](@ref).
+
+The signature matches that of [`get`](@ref) except that the the result is placed
+in the vector `output`.
 """
-function get! end
 function get!(output, model::ModelLike, attr::AnyAttribute, args...)
-    return throw(
-        ArgumentError(
-            "ModelLike of type $(typeof(model)) does not support accessing the attribute $attr",
-        ),
-    )
+    output .= get(model, attr, args...)
+    return
 end
 
 """
@@ -373,9 +441,9 @@ function type used to define the constraint.
 #### Note
 
 Setting the constraint function is not allowed if `F` is
-[`SingleVariable`](@ref), it throws a
-[`SettingSingleVariableFunctionNotAllowed`](@ref) error. Indeed, it would
-require changing the index `c` as the index of `SingleVariable` constraints
+[`VariableIndex`](@ref), it throws a
+[`SettingVariableIndexNotAllowed`](@ref) error. Indeed, it would
+require changing the index `c` as the index of `VariableIndex` constraints
 should be the same as the index of the variable.
 
 #### Examples
@@ -386,7 +454,7 @@ If `c` is a `ConstraintIndex{ScalarAffineFunction,S}` and `v1` and `v2` are
 ```julia
 set(model, ConstraintFunction(), c,
     ScalarAffineFunction(ScalarAffineTerm.([1.0, 2.0], [v1, v2]), 5.0))
-set(model, ConstraintFunction(), c, SingleVariable(v1)) # Error
+set(model, ConstraintFunction(), c, v1) # Error
 ```
 """
 function set end
@@ -443,12 +511,12 @@ function throw_set_error_fallback(
 end
 
 """
-    SettingSingleVariableFunctionNotAllowed()
+    SettingVariableIndexNotAllowed()
 
 Error type that should be thrown when the user calls [`set`](@ref) to change
-the [`ConstraintFunction`](@ref) of a [`SingleVariable`](@ref) constraint.
+the [`ConstraintFunction`](@ref) of a [`VariableIndex`](@ref) constraint.
 """
-struct SettingSingleVariableFunctionNotAllowed <: Exception end
+struct SettingVariableIndexNotAllowed <: Exception end
 
 """
     submit(optimizer::AbstractOptimizer, sub::AbstractSubmittable,
@@ -469,7 +537,12 @@ function submit(model::ModelLike, sub::AbstractSubmittable, args...)
             ),
         )
     else
-        throw(UnsupportedSubmittable(sub))
+        throw(
+            UnsupportedSubmittable(
+                sub,
+                "submit(::$(typeof(model)), ::$(typeof(sub))) is not supported.",
+            ),
+        )
     end
 end
 
@@ -488,11 +561,10 @@ argument to the feasible solution callback.
 
 ## Examples
 
-Suppose `fx = MOI.SingleVariable(x)` and `fx = MOI.SingleVariable(y)`
-where `x` and `y` are [`VariableIndex`](@ref)s of `optimizer`. To add a
+Suppose `x` and `y` are [`VariableIndex`](@ref)s of `optimizer`. To add a
 `LazyConstraint` for `2x + 3y <= 1`, write
 ```julia
-func = 2.0fx + 3.0fy
+func = 2.0x + 3.0y
 set = MOI.LessThan(1.0)
 MOI.submit(optimizer, MOI.LazyConstraint(callback_data), func, set)
 ```
@@ -619,7 +691,10 @@ Returns a [`CallbackNodeStatusCode`](@ref) Enum.
 struct CallbackNodeStatus{CallbackDataType} <: AbstractOptimizerAttribute
     callback_data::CallbackDataType
 end
+
 is_set_by_optimize(::CallbackNodeStatus) = true
+
+attribute_value_type(::CallbackNodeStatus) = CallbackNodeStatusCode
 
 ## Optimizer attributes
 
@@ -636,6 +711,27 @@ struct ListOfOptimizerAttributesSet <: AbstractOptimizerAttribute end
 An optimizer attribute for the string identifying the solver/optimizer.
 """
 struct SolverName <: AbstractOptimizerAttribute end
+
+attribute_value_type(::SolverName) = String
+
+"""
+    SolverVersion()
+
+An optimizer attribute for the string identifying the version of the solver.
+
+!!! note
+
+    For solvers supporting [semantic versioning](https://semver.org), the `SolverVersion` should be a string
+    of the form "vMAJOR.MINOR.PATCH", so that it can be converted to
+    a Julia `VersionNumber` (e.g., `VersionNumber("v1.2.3")).
+
+    We do not require Semantic Versioning because some solvers use
+    alternate versioning systems. For example, CPLEX uses Calendar
+    Versioning, so `SolverVersion` will return a string like `"202001"`.
+"""
+struct SolverVersion <: AbstractOptimizerAttribute end
+
+attribute_value_type(::SolverVersion) = String
 
 """
     Silent()
@@ -658,6 +754,8 @@ given.
 """
 struct Silent <: AbstractOptimizerAttribute end
 
+attribute_value_type(::Silent) = Bool
+
 """
     TimeLimitSec()
 
@@ -666,6 +764,8 @@ to `nothing`, it deactivates the solver time limit. The default value is
 `nothing`. The time limit is in seconds.
 """ # TODO add a test checking if the solver returns TIME_LIMIT status when the time limit is hit
 struct TimeLimitSec <: AbstractOptimizerAttribute end
+
+attribute_value_type(::TimeLimitSec) = Union{Nothing,Float64}
 
 """
     RawOptimizerAttribute(name::String)
@@ -684,6 +784,8 @@ optimization. When set to `nothing` uses solver default. Values are positive
 integers. The default value is `nothing`.
 """
 struct NumberOfThreads <: AbstractOptimizerAttribute end
+
+attribute_value_type(::NumberOfThreads) = Union{Nothing,Int}
 
 ### Callbacks
 
@@ -729,6 +831,8 @@ commonly called `callback_data`, that can be used for instance in
 [`UserCutCallback`](@ref).
 """
 abstract type AbstractCallback <: AbstractModelAttribute end
+
+attribute_value_type(::AbstractCallback) = Function
 
 """
     LazyConstraintCallback() <: AbstractCallback
@@ -839,6 +943,10 @@ of `""` if not set`.
 """
 struct Name <: AbstractModelAttribute end
 
+attribute_value_type(::Name) = String
+
+@enum OptimizationSense MIN_SENSE MAX_SENSE FEASIBILITY_SENSE
+
 """
     ObjectiveSense()
 
@@ -848,7 +956,7 @@ must be an `OptimizationSense`: `MIN_SENSE`, `MAX_SENSE`, or
 """
 struct ObjectiveSense <: AbstractModelAttribute end
 
-@enum OptimizationSense MIN_SENSE MAX_SENSE FEASIBILITY_SENSE
+attribute_value_type(::ObjectiveSense) = OptimizationSense
 
 """
     NumberOfVariables()
@@ -856,6 +964,8 @@ struct ObjectiveSense <: AbstractModelAttribute end
 A model attribute for the number of variables in the model.
 """
 struct NumberOfVariables <: AbstractModelAttribute end
+
+attribute_value_type(::NumberOfVariables) = Int64
 
 """
     ListOfVariableIndices()
@@ -882,6 +992,8 @@ A model attribute for the number of constraints of the type `F`-in-`S` present i
 """
 struct NumberOfConstraints{F,S} <: AbstractModelAttribute end
 
+attribute_value_type(::NumberOfConstraints) = Int64
+
 """
     ListOfConstraintTypesPresent()
 
@@ -890,7 +1002,7 @@ and `S` is a set type indicating that the attribute `NumberOfConstraints{F,S}()`
 has value greater than zero.
 """
 struct ListOfConstraintTypesPresent <: AbstractModelAttribute end
-@deprecate ListOfConstraints ListOfConstraintTypesPresent
+@deprecate ListOfConstraints ListOfConstraintTypesPresent false
 
 """
     ObjectiveFunction{F<:AbstractScalarFunction}()
@@ -903,6 +1015,8 @@ it has non-integer coefficient and `F` is `ScalarAffineFunction{Int}`.
 """
 struct ObjectiveFunction{F<:AbstractScalarFunction} <: AbstractModelAttribute end
 
+attribute_value_type(::ObjectiveFunction{F}) where {F} = F
+
 """
     ObjectiveFunctionType()
 
@@ -911,15 +1025,17 @@ A model attribute for the type `F` of the objective function set using the
 
 ## Examples
 
-In the following code, `attr` should be equal to `MOI.SingleVariable`:
+In the following code, `attr` should be equal to `MOI.VariableIndex`:
 ```julia
 x = MOI.add_variable(model)
-MOI.set(model, MOI.ObjectiveFunction{MOI.SingleVariable}(),
-         MOI.SingleVariable(x))
+MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(),
+         x)
 attr = MOI.get(model, MOI.ObjectiveFunctionType())
 ```
 """
 struct ObjectiveFunctionType <: AbstractModelAttribute end
+
+attribute_value_type(::ObjectiveFunctionType) = Type{<:AbstractFunction}
 
 ## Optimizer attributes
 
@@ -927,6 +1043,14 @@ struct ObjectiveFunctionType <: AbstractModelAttribute end
     ObjectiveValue(result_index::Int = 1)
 
 A model attribute for the objective value of the primal solution `result_index`.
+
+If the solver does not have a primal value for the objective because the
+`result_index` is beyond the available solutions (whose number is indicated by
+the [`ResultCount`](@ref) attribute), getting this attribute must throw a
+[`ResultIndexBoundsError`](@ref). Otherwise, if the result is unavailable for
+another reason (for instance, only a dual solution is available), the result is
+undefined. Users should first check [`PrimalStatus`](@ref) before accessing the
+`ObjectiveValue` attribute.
 
 See [`ResultCount`](@ref) for information on how the results are ordered.
 """
@@ -940,6 +1064,14 @@ end
 
 A model attribute for the value of the objective function of the dual problem
 for the `result_index`th dual result.
+
+If the solver does not have a dual value for the objective because the
+`result_index` is beyond the available solutions (whose number is indicated by
+the [`ResultCount`](@ref) attribute), getting this attribute must throw a
+[`ResultIndexBoundsError`](@ref). Otherwise, if the result is unavailable for
+another reason (for instance, only a primal solution is available), the result is
+undefined. Users should first check [`DualStatus`](@ref) before accessing the
+`DualObjectiveValue` attribute.
 
 See [`ResultCount`](@ref) for information on how the results are ordered.
 """
@@ -958,9 +1090,17 @@ struct ObjectiveBound <: AbstractModelAttribute end
 """
     RelativeGap()
 
-A model attribute for the final relative optimality gap, defined as ``\\frac{|b-f|}{|f|}``, where ``b`` is the best bound and ``f`` is the best feasible objective value.
+A model attribute for the final relative optimality gap.
+
+!!! warning
+    The definition of this gap is solver-dependent. However, most solvers
+    implementing this attribute define the relative gap as some variation of
+    ``\\frac{|b-f|}{|f|}``, where ``b`` is the best bound and ``f`` is the best
+    feasible objective value.
 """
 struct RelativeGap <: AbstractModelAttribute end
+
+attribute_value_type(::RelativeGap) = Float64
 
 """
     SolveTimeSec()
@@ -969,7 +1109,9 @@ A model attribute for the total elapsed solution time (in seconds) as reported b
 """
 struct SolveTimeSec <: AbstractModelAttribute end
 
-@deprecate SolveTime SolveTimeSec
+attribute_value_type(::SolveTimeSec) = Float64
+
+@deprecate SolveTime SolveTimeSec false
 
 """
     SimplexIterations()
@@ -979,6 +1121,8 @@ In particular, for a mixed-integer program (MIP), the total simplex iterations f
 """
 struct SimplexIterations <: AbstractModelAttribute end
 
+attribute_value_type(::SimplexIterations) = Int64
+
 """
     BarrierIterations()
 
@@ -986,12 +1130,16 @@ A model attribute for the cumulative number of barrier iterations while solving 
 """
 struct BarrierIterations <: AbstractModelAttribute end
 
+attribute_value_type(::BarrierIterations) = Int64
+
 """
     NodeCount()
 
 A model attribute for the total number of branch-and-bound nodes explored while solving a mixed-integer program (MIP).
 """
 struct NodeCount <: AbstractModelAttribute end
+
+attribute_value_type(::NodeCount) = Int64
 
 """
     RawSolver()
@@ -1030,6 +1178,8 @@ results may be alternate certificates, or infeasible points.
 """
 struct ResultCount <: AbstractModelAttribute end
 
+attribute_value_type(::ResultCount) = Int
+
 """
     ConflictStatusCode
 
@@ -1059,6 +1209,8 @@ refiner stopped when computing the conflict.
 """
 struct ConflictStatus <: AbstractModelAttribute end
 
+attribute_value_type(::ConflictStatus) = ConflictStatusCode
+
 ## Variable attributes
 
 """
@@ -1080,6 +1232,8 @@ set`.
 """
 struct VariableName <: AbstractVariableAttribute end
 
+attribute_value_type(::VariableName) = String
+
 """
     VariablePrimalStart()
 
@@ -1092,6 +1246,14 @@ struct VariablePrimalStart <: AbstractVariableAttribute end
 
 A variable attribute for the assignment to some primal variable's value in
 result `result_index`. If `result_index` is omitted, it is 1 by default.
+
+If the solver does not have a primal value for the variable because the
+`result_index` is beyond the available solutions (whose number is indicated by
+the [`ResultCount`](@ref) attribute), getting this attribute must throw a
+[`ResultIndexBoundsError`](@ref). Otherwise, if the result is unavailable for
+another reason (for instance, only a dual solution is available), the result is
+undefined. Users should first check [`PrimalStatus`](@ref) before accessing the
+`VariablePrimal` attribute.
 
 See [`ResultCount`](@ref) for information on how the results are ordered.
 """
@@ -1114,8 +1276,9 @@ is_set_by_optimize(::CallbackVariablePrimal) = true
 """
     BasisStatusCode
 
-An Enum of possible values for the `ConstraintBasisStatus` attribute, explaining
-the status of a given element with respect to an optimal solution basis.
+An Enum of possible values for the [`ConstraintBasisStatus`](@ref) and
+[`VariableBasisStatus`](@ref) attributes, explaining the status of a given
+element with respect to an optimal solution basis.
 
 Possible values are:
 
@@ -1126,17 +1289,18 @@ Possible values are:
 * `SUPER_BASIC`: element is not in the basis but is also not at one of its
   bounds
 
-Notes
+## Notes
 
 * `NONBASIC_AT_LOWER` and `NONBASIC_AT_UPPER` should be used only for
   constraints with the `Interval` set. In this case, they are necessary to
   distinguish which side of the constraint is active. One-sided constraints
   (e.g., `LessThan` and `GreaterThan`) should use `NONBASIC` instead of the
-  `NONBASIC_AT_*` values.
+  `NONBASIC_AT_*` values. This restriction does not apply to [`VariableBasisStatus`](@ref),
+  which should return `NONBASIC_AT_*` regardless of whether the alternative
+  bound exists.
 
-* In general, `SUPER_BASIC` usually occurs when the problem is nonlinear. For
-  linear programs, `SUPER_BASIC` variables only occur if the solver returns a
-  solution that is not at a vertex of the feasible region.
+* In linear programs, `SUPER_BASIC` occurs when a variable with no bounds is not
+  in the basis.
 """
 @enum(
     BasisStatusCode,
@@ -1146,6 +1310,29 @@ Notes
     NONBASIC_AT_UPPER,
     SUPER_BASIC
 )
+
+"""
+    VariableBasisStatus(result_index::Int = 1)
+
+A variable attribute for the `BasisStatusCode` of a variable in result
+`result_index`, with respect to an available optimal solution basis.
+
+If the solver does not have a basis statue for the variable because the
+`result_index` is beyond the available solutions (whose number is indicated by
+the [`ResultCount`](@ref) attribute), getting this attribute must throw a
+[`ResultIndexBoundsError`](@ref). Otherwise, if the result is unavailable for
+another reason (for instance, only a dual solution is available), the result is
+undefined. Users should first check [`PrimalStatus`](@ref) before accessing the
+`VariableBasisStatus` attribute.
+
+See [`ResultCount`](@ref) for information on how the results are ordered.
+"""
+struct VariableBasisStatus <: AbstractVariableAttribute
+    result_index::Int
+    VariableBasisStatus(result_index::Int = 1) = new(result_index)
+end
+
+attribute_value_type(::VariableBasisStatus) = BasisStatusCode
 
 ## Constraint attributes
 
@@ -1176,42 +1363,52 @@ regardless of whether they have the same `F`-in-`S` type.
 
 ## Notes
 
-You should _not_ implement `ConstraintName` for `SingleVariable` constraints.
+You should _not_ implement `ConstraintName` for `VariableIndex` constraints.
 """
 struct ConstraintName <: AbstractConstraintAttribute end
 
+attribute_value_type(::ConstraintName) = String
+
 """
-    SingleVariableConstraintNameError()
+    VariableIndexConstraintNameError()
 
 An error to be thrown when the user tries to set `ConstraintName` on a
-`SingleVariable` constraint.
+`VariableIndex` constraint.
 """
-function SingleVariableConstraintNameError()
+function VariableIndexConstraintNameError()
     return UnsupportedAttribute(
         ConstraintName(),
-        "`ConstraintName`s are not supported for `SingleVariable` constraints.",
+        "`ConstraintName`s are not supported for `VariableIndex` constraints.",
     )
 end
 
 function supports_fallback(
     ::ModelLike,
     ::ConstraintName,
-    ::Type{ConstraintIndex{SingleVariable,S}},
+    ::Type{ConstraintIndex{VariableIndex,S}},
 ) where {S}
-    return throw(SingleVariableConstraintNameError())
+    return throw(VariableIndexConstraintNameError())
 end
 
 """
     ConstraintPrimalStart()
 
-A constraint attribute for the initial assignment to some constraint's primal value(s) that the optimizer may use to warm-start the solve. May be a number or `nothing` (unset).
+A constraint attribute for the initial assignment to some constraint's
+[`ConstraintPrimal`](@ref) that the optimizer may use to warm-start the solve.
+
+May be `nothing` (unset), a number for [`AbstractScalarFunction`](@ref), or a
+vector for [`AbstractVectorFunction`](@ref).
 """
 struct ConstraintPrimalStart <: AbstractConstraintAttribute end
 
 """
     ConstraintDualStart()
 
-A constraint attribute for the initial assignment to some constraint's dual value(s) that the optimizer may use to warm-start the solve. May be a number or `nothing` (unset).
+A constraint attribute for the initial assignment to some constraint's
+[`ConstraintDual`](@ref) that the optimizer may use to warm-start the solve.
+
+May be `nothing` (unset), a number for [`AbstractScalarFunction`](@ref), or a
+vector for [`AbstractVectorFunction`](@ref).
 """
 struct ConstraintDualStart <: AbstractConstraintAttribute end
 
@@ -1219,19 +1416,27 @@ struct ConstraintDualStart <: AbstractConstraintAttribute end
     ConstraintPrimal(result_index::Int = 1)
 
 A constraint attribute for the assignment to some constraint's primal value(s)
-in result `result_index`. If `result_index` is omitted, it is 1 by default.
+in result `result_index`.
 
-See [`ResultCount`](@ref) for information on how the results are ordered.
+If the constraint is `f(x) in S`, then in most cases the `ConstraintPrimal` is
+the value of `f`, evaluated at the correspondng [`VariablePrimal`](@ref)
+solution.
 
-## Example
+However, some conic solvers reformulate `b - Ax in S` to `s = b - Ax, s in S`.
+These solvers may return the value of `s` for `ConstraintPrimal`, rather than
+`b - Ax`. (Although these are constrained by an equality constraint, due to
+numerical tolerances they may not be identical.)
 
-Given a constraint `function-in-set`, the `ConstraintPrimal` is the value of the
-function evaluated at the primal solution of the variables.
+If the solver does not have a primal value for the constraint because the
+`result_index` is beyond the available solutions (whose number is indicated by
+the [`ResultCount`](@ref) attribute), getting this attribute must throw a
+[`ResultIndexBoundsError`](@ref). Otherwise, if the result is unavailable for
+another reason (for instance, only a dual solution is available), the result is
+undefined. Users should first check [`PrimalStatus`](@ref) before accessing the
+`ConstraintPrimal` attribute.
 
-For example, given the constraint
-`ScalarAffineFunction([x,y], [1, 2], 3)`-in-`Interval(0, 20)` and a primal
-solution of `(x,y) = (4,5)`, the `ConstraintPrimal` solution of the constraint
-is `1 * 4 + 2 * 5 + 3 = 17`.
+If `result_index` is omitted, it is 1 by default. See [`ResultCount`](@ref) for
+information on how the results are ordered.
 """
 struct ConstraintPrimal <: AbstractConstraintAttribute
     result_index::Int
@@ -1243,6 +1448,14 @@ end
 
 A constraint attribute for the assignment to some constraint's dual value(s) in
 result `result_index`. If `result_index` is omitted, it is 1 by default.
+
+If the solver does not have a dual value for the variable because the
+`result_index` is beyond the available solutions (whose number is indicated by
+the [`ResultCount`](@ref) attribute), getting this attribute must throw a
+[`ResultIndexBoundsError`](@ref). Otherwise, if the result is unavailable for
+another reason (for instance, only a primal solution is available), the result is
+undefined. Users should first check [`DualStatus`](@ref) before accessing the
+`ConstraintDual` attribute.
 
 See [`ResultCount`](@ref) for information on how the results are ordered.
 """
@@ -1258,14 +1471,40 @@ A constraint attribute for the `BasisStatusCode` of some constraint in result
 `result_index`, with respect to an available optimal solution basis. If
 `result_index` is omitted, it is 1 by default.
 
+If the solver does not have a basis statue for the constraint because the
+`result_index` is beyond the available solutions (whose number is indicated by
+the [`ResultCount`](@ref) attribute), getting this attribute must throw a
+[`ResultIndexBoundsError`](@ref). Otherwise, if the result is unavailable for
+another reason (for instance, only a dual solution is available), the result is
+undefined. Users should first check [`PrimalStatus`](@ref) before accessing the
+`ConstraintBasisStatus` attribute.
+
 See [`ResultCount`](@ref) for information on how the results are ordered.
 
-**For the basis status of a variable, query the corresponding `SingleVariable`
-constraint that enforces the variable's bounds.**
+## Notes
+
+For the basis status of a variable, query [`VariableBasisStatus`](@ref).
+
+`ConstraintBasisStatus` does not apply to `VariableIndex` constraints. You
+can infer the basis status of a [`VariableIndex`](@ref) constraint by looking
+at the result of [`VariableBasisStatus`](@ref).
 """
 struct ConstraintBasisStatus <: AbstractConstraintAttribute
     result_index::Int
     ConstraintBasisStatus(result_index::Int = 1) = new(result_index)
+end
+
+attribute_value_type(::ConstraintBasisStatus) = BasisStatusCode
+
+function get_fallback(
+    ::ModelLike,
+    ::ConstraintBasisStatus,
+    ::ConstraintIndex{VariableIndex,<:AbstractScalarSet},
+)
+    return error(
+        "Querying the basis status of a `VariableIndex` constraint is not ",
+        "supported. Use [`VariableBasisStatus`](@ref) instead.",
+    )
 end
 
 """
@@ -1287,6 +1526,8 @@ whether the function stored internally is already canonical and if it's the case
 then it returns the function stored internally instead of a copy.
 """
 struct CanonicalConstraintFunction <: AbstractConstraintAttribute end
+
+attribute_value_type(::CanonicalConstraintFunction) = AbstractFunction
 
 function get_fallback(
     model::ModelLike,
@@ -1316,6 +1557,17 @@ It is guaranteed to be equivalent but not necessarily identical to the function 
 """
 struct ConstraintFunction <: AbstractConstraintAttribute end
 
+attribute_value_type(::ConstraintFunction) = AbstractFunction
+
+struct FunctionTypeMismatch{F1,F2} <: Exception end
+function Base.showerror(io::IO, err::FunctionTypeMismatch{F1,F2}) where {F1,F2}
+    return print(
+        io,
+        """$(typeof(err)): Cannot modify functions of different types.
+  Constraint type is $F1 while the replacement function is of type $F2.""",
+    )
+end
+
 function throw_set_error_fallback(
     ::ModelLike,
     attr::ConstraintFunction,
@@ -1329,15 +1581,11 @@ func_type(c::ConstraintIndex{F,S}) where {F,S} = F
 function throw_set_error_fallback(
     ::ModelLike,
     ::ConstraintFunction,
-    constraint_index::ConstraintIndex,
+    ci::ConstraintIndex,
     func::AbstractFunction;
     kwargs...,
 )
-    return throw(
-        ArgumentError("""Cannot modify functions of different types.
-  Constraint type is $(func_type(constraint_index)) while the replacement
-  function is of type $(typeof(func))."""),
-    )
+    return throw(FunctionTypeMismatch{func_type(ci),typeof(func)}())
 end
 
 """
@@ -1346,6 +1594,18 @@ end
 A constraint attribute for the `AbstractSet` object used to define the constraint.
 """
 struct ConstraintSet <: AbstractConstraintAttribute end
+
+attribute_value_type(::ConstraintSet) = AbstractSet
+
+struct SetTypeMismatch{S1,S2} <: Exception end
+function Base.showerror(io::IO, err::SetTypeMismatch{S1,S2}) where {S1,S2}
+    return print(
+        io,
+        """$(typeof(err)): Cannot modify sets of different types. Constraint
+  type is $S1 while the replacement set is of type $S2. Use `transform`
+  instead.""",
+    )
+end
 
 function throw_set_error_fallback(
     ::ModelLike,
@@ -1364,11 +1624,7 @@ function throw_set_error_fallback(
     set::AbstractSet;
     kwargs...,
 )
-    return throw(
-        ArgumentError("""Cannot modify sets of different types. Constraint
-  type is $(set_type(constraint_index)) while the replacement set is of
-  type $(typeof(set)). Use `transform` instead."""),
-    )
+    return throw(SetTypeMismatch{set_type(constraint_index),typeof(set)}())
 end
 
 """
@@ -1400,13 +1656,11 @@ in the conflict. Its type is [`ConflictParticipationStatusCode`](@ref).
 """
 struct ConstraintConflictStatus <: AbstractConstraintAttribute end
 
-## Termination status
-"""
-    TerminationStatus()
+function attribute_value_type(::ConstraintConflictStatus)
+    return ConflictParticipationStatusCode
+end
 
-A model attribute for the `TerminationStatusCode` explaining why the optimizer stopped.
-"""
-struct TerminationStatus <: AbstractModelAttribute end
+## Termination status
 
 """
     TerminationStatusCode
@@ -1521,12 +1775,23 @@ This group of statuses means that something unexpected or problematic happened.
 )
 
 """
+    TerminationStatus()
+
+A model attribute for the `TerminationStatusCode` explaining why the optimizer stopped.
+"""
+struct TerminationStatus <: AbstractModelAttribute end
+
+attribute_value_type(::TerminationStatus) = TerminationStatusCode
+
+"""
     RawStatusString()
 
 A model attribute for a solver specific string explaining why the optimizer
 stopped.
 """
 struct RawStatusString <: AbstractModelAttribute end
+
+attribute_value_type(::RawStatusString) = String
 
 ## Result status
 
@@ -1591,6 +1856,8 @@ struct PrimalStatus <: AbstractModelAttribute
     PrimalStatus(result_index::Int = 1) = new(result_index)
 end
 
+attribute_value_type(::PrimalStatus) = ResultStatusCode
+
 """
     DualStatus(result_index::Int = 1)
 
@@ -1607,8 +1874,13 @@ struct DualStatus <: AbstractModelAttribute
     DualStatus(result_index::Int = 1) = new(result_index)
 end
 
+attribute_value_type(::DualStatus) = ResultStatusCode
+
 # Cost of bridging constrained variable in S
 struct VariableBridgingCost{S<:AbstractSet} <: AbstractModelAttribute end
+
+attribute_value_type(::VariableBridgingCost) = Float64
+
 function get_fallback(
     model::ModelLike,
     ::VariableBridgingCost{S},
@@ -1625,6 +1897,9 @@ end
 # Cost of bridging F-in-S constraints
 struct ConstraintBridgingCost{F<:AbstractFunction,S<:AbstractSet} <:
        AbstractModelAttribute end
+
+attribute_value_type(::ConstraintBridgingCost) = Float64
+
 function get_fallback(
     model::ModelLike,
     ::ConstraintBridgingCost{F,S},
@@ -1667,6 +1942,7 @@ function is_set_by_optimize(
         ConstraintPrimal,
         ConstraintDual,
         ConstraintBasisStatus,
+        VariableBasisStatus,
     },
 )
     return true

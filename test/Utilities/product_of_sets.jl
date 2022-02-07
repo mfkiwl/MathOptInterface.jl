@@ -100,7 +100,7 @@ function test_scalar_NumberOfConstraints()
     MOI.Utilities.final_touch(sets)
     @test MOI.get(
         sets,
-        MOI.NumberOfConstraints{MOI.SingleVariable,MOI.ZeroOne}(),
+        MOI.NumberOfConstraints{MOI.VariableIndex,MOI.ZeroOne}(),
     ) == 0
     for (x, S) in zip([2, 1, 0, 0], MOI.Utilities.set_types(sets))
         @test MOI.get(
@@ -168,6 +168,9 @@ function test_vector_basic()
     equalto_ci = MOI.ConstraintIndex{SAF,MOI.EqualTo{Float64}}(equalto_i)
     @test MOI.is_valid(sets, equalto_ci)
     @test MOI.Utilities.rows(sets, equalto_ci) == 3
+    @test MOI.Utilities.num_rows(sets, MOI.Nonnegatives) == 2
+    @test MOI.Utilities.num_rows(sets, MOI.EqualTo{Float64}) == 1
+    @test MOI.Utilities.num_rows(sets, MOI.Nonpositives) == 0
 end
 
 function test_vector_dimension()

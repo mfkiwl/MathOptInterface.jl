@@ -65,7 +65,7 @@ To write a model `src` to a [MathOptFormat file](https://jump.dev/MathOptFormat/
 use:
 ```jldoctest fileformats
 julia> src = MOI.Utilities.Model{Float64}()
-MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
+MOIU.Model{Float64}
 
 julia> MOI.add_variable(src)
 MathOptInterface.VariableIndex(1)
@@ -83,8 +83,8 @@ julia> print(read("file.mof.json", String))
 {
   "name": "MathOptFormat Model",
   "version": {
-    "major": 0,
-    "minor": 6
+    "major": 1,
+    "minor": 0
   },
   "variables": [
     {
@@ -108,7 +108,7 @@ A MathOptFormat Model
 julia> MOI.read_from_file(dest, "file.mof.json")
 
 julia> MOI.get(dest, MOI.ListOfVariableIndices())
-1-element Array{MathOptInterface.VariableIndex,1}:
+1-element Vector{MathOptInterface.VariableIndex}:
  MathOptInterface.VariableIndex(1)
 
 julia> rm("file.mof.json")  # Clean up after ourselves.
@@ -122,13 +122,13 @@ guess the format from the file extension. For example:
 
 ```jldoctest fileformats
 julia> src = MOI.Utilities.Model{Float64}()
-MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
+MOIU.Model{Float64}
 
 julia> dest = MOI.FileFormats.Model(filename = "file.cbf.gz")
 A Conic Benchmark Format (CBF) model
 
 julia> MOI.copy_to(dest, src)
-MathOptInterface.Utilities.IndexMap with 0 entries
+MathOptInterface.Utilities.IndexMap()
 
 julia> MOI.write_to_file(dest, "file.cbf.gz")
 
@@ -136,13 +136,13 @@ julia> src_2 = MOI.FileFormats.Model(filename = "file.cbf.gz")
 A Conic Benchmark Format (CBF) model
 
 julia> src = MOI.Utilities.Model{Float64}()
-MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
+MOIU.Model{Float64}
 
 julia> dest = MOI.FileFormats.Model(filename = "file.cbf.gz")
 A Conic Benchmark Format (CBF) model
 
 julia> MOI.copy_to(dest, src)
-MathOptInterface.Utilities.IndexMap with 0 entries
+MathOptInterface.Utilities.IndexMap()
 
 julia> MOI.write_to_file(dest, "file.cbf.gz")
 
@@ -160,19 +160,20 @@ filename.
 
 In some cases `src` may contain constraints that are not supported by the file
 format (e.g., the CBF format supports integer variables but not binary). If so,
-you should copy `src` to a bridged model using [`Bridges.full_bridge_optimizer`](@ref):
+copy `src` to a bridged model using [`Bridges.full_bridge_optimizer`](@ref):
 ```julia
 src = MOI.Utilities.Model{Float64}()
 x = MOI.add_variable(model)
-MOI.add_constraint(model, MOI.SingleVariable(x), MOI.ZeroOne())
+MOI.add_constraint(model, x, MOI.ZeroOne())
 dest = MOI.FileFormats.Model(format = MOI.FileFormats.FORMAT_CBF)
 bridged = MOI.Bridges.full_bridge_optimizer(dest, Float64)
 MOI.copy_to(bridged, src)
 MOI.write_to_file(dest, "my_model.cbf")
 ```
-You should also note that even after bridging, it may still not be possible to
-write the model to file because of unsupported constraints (e.g., PSD variables
-in the LP file format).
+!!! note
+    Even after bridging, it may still not be possible to write the model to file
+    because of unsupported constraints (e.g., PSD variables in the LP file
+    format).
 
 ## Read and write to `io`
 
@@ -180,26 +181,24 @@ In addition to [`write_to_file`](@ref) and [`read_from_file`](@ref), you can
 read and write directly from `IO` streams using `Base.write` and `Base.read!`:
 ```jldoctest
 julia> src = MOI.Utilities.Model{Float64}()
-MOIU.GenericModel{Float64,MOIU.ModelFunctionConstraints{Float64}}
+MOIU.Model{Float64}
 
 julia> dest = MOI.FileFormats.Model(format = MOI.FileFormats.FORMAT_MPS)
 A Mathematical Programming System (MPS) model
 
 julia> MOI.copy_to(dest, src)
-MathOptInterface.Utilities.IndexMap with 0 entries
+MathOptInterface.Utilities.IndexMap()
 
-julia> io = IOBuffer()
-IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=Inf, ptr=1, mark=-1)
+julia> io = IOBuffer();
 
 julia> write(io, dest)
 
-julia> seekstart(io)
-IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=61, maxsize=Inf, ptr=1, mark=-1)
+julia> seekstart(io);
 
 julia> src_2 = MOI.FileFormats.Model(format = MOI.FileFormats.FORMAT_MPS)
 A Mathematical Programming System (MPS) model
 
-julia> read!(io, src_2)
+julia> read!(io, src_2);
 ```
 
 ## Validating MOF files
@@ -220,8 +219,8 @@ Then, check if a model file is valid using `isvalid`:
 julia> good_model = JSON.parse("""
        {
          "version": {
-           "major": 0,
-           "minor": 6
+           "major": 1,
+           "minor": 0
          },
          "variables": [{"name": "x"}],
          "objective": {"sense": "feasibility"},
@@ -239,8 +238,8 @@ validation fails:
 julia> bad_model = JSON.parse("""
        {
          "version": {
-           "major": 0,
-           "minor": 6
+           "major": 1,
+           "minor": 0
          },
          "variables": [{"NaMe": "x"}],
          "objective": {"sense": "feasibility"},
@@ -257,7 +256,7 @@ Use `JSONSchema.validate` to obtain more insight into why the validation failed:
 julia> JSONSchema.validate(bad_model, schema)
 Validation failed:
 path:         [variables][1]
-instance:     Dict{String,Any}("NaMe"=>"x")
+instance:     Dict{String, Any}("NaMe" => "x")
 schema key:   required
 schema value: Any["name"]
 ```

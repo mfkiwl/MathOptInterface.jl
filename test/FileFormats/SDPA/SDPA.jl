@@ -22,7 +22,7 @@ function _set_var_and_con_names(model::MOI.ModelLike)
     single_variable_constraints = Tuple[]
     for i in MOI.get(
         model,
-        MOI.ListOfConstraintIndices{MOI.SingleVariable,MOI.Integer}(),
+        MOI.ListOfConstraintIndices{MOI.VariableIndex,MOI.Integer}(),
     )
         idx += 1
         x = MOI.get(model, MOI.VariableName(), MOI.VariableIndex(i.value))
@@ -69,7 +69,7 @@ function _test_write_then_read(model_string::String)
         MOI.set(model2, attr, MOIU.operate(-, Float64, obj))
     end
 
-    return MOIU.test_models_equal(model1, model2, args...)
+    return MOI.Test.util_test_models_equal(model1, model2, args...)
 end
 
 function _test_read(filename::String, model_string::String)
@@ -79,7 +79,7 @@ function _test_read(filename::String, model_string::String)
     model2 = SDPA.Model()
     MOI.read_from_file(model2, filename)
     _set_var_and_con_names(model2)
-    return MOIU.test_models_equal(model1, model2, args...)
+    return MOI.Test.util_test_models_equal(model1, model2, args...)
 end
 
 function test_show()
@@ -103,8 +103,8 @@ function test_support()
         x in $set
         """
         model = SDPA.Model()
-        @test !MOI.supports_constraint(model, MOI.SingleVariable, typeof(set))
-        err = MOI.UnsupportedConstraint{MOI.SingleVariable,typeof(set)}
+        @test !MOI.supports_constraint(model, MOI.VariableIndex, typeof(set))
+        err = MOI.UnsupportedConstraint{MOI.VariableIndex,typeof(set)}
         @test_throws err MOIU.loadfromstring!(model, model_string)
     end
 end
@@ -115,10 +115,9 @@ function test_delete()
         x = MOI.add_variable(model)
         MOI.delete(model, x)
         y = MOI.add_variable(model)
-        fy = MOI.SingleVariable(y)
         MOI.add_constraint(
             model,
-            MOIU.vectorize([one(T) * fy]),
+            MOIU.vectorize([one(T) * y]),
             MOI.Nonnegatives(1),
         )
         err = ErrorException(
@@ -131,7 +130,7 @@ end
 function test_objective()
     for T in [Int, Float64]
         model = SDPA.Model(; number_type = T)
-        @test !MOI.supports(model, MOI.ObjectiveFunction{MOI.SingleVariable}())
+        @test !MOI.supports(model, MOI.ObjectiveFunction{MOI.VariableIndex}())
         @test !MOI.supports(
             model,
             MOI.ObjectiveFunction{MOI.ScalarQuadraticFunction{T}}(),
@@ -261,7 +260,7 @@ const _EXAMPLE_MODELS = [
         """
     variables: x, y
     minobjective: 10x + 20y
-    c1: [x + -1, 0, x + -2] in PositiveSemidefiniteConeTriangle(2)
+    c1: [x + -1, 0, x + y + -2] in PositiveSemidefiniteConeTriangle(2)
     c2: [5y + -3, 2y, 6y + -4] in PositiveSemidefiniteConeTriangle(2)
 """,
     ),
@@ -298,7 +297,7 @@ end
 function runtests()
     for name in names(@__MODULE__, all = true)
         if startswith("$(name)", "test_")
-            @testset "name" begin
+            @testset "$name" begin
                 getfield(@__MODULE__, name)()
             end
         end

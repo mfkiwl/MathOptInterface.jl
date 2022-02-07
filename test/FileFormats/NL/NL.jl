@@ -30,7 +30,7 @@ end
 
 function test_nlexpr_singlevariable()
     x = MOI.VariableIndex(1)
-    _test_nlexpr(MOI.SingleVariable(x), NL._NLTerm[], Dict(x => 1.0), 0.0)
+    _test_nlexpr(x, NL._NLTerm[], Dict(x => 1.0), 0.0)
     return
 end
 
@@ -43,8 +43,8 @@ end
 function test_nlexpr_scalarquadratic_0()
     x = MOI.VariableIndex(1)
     f = MOI.ScalarQuadraticFunction(
-        [MOI.ScalarAffineTerm(1.1, x)],
         MOI.ScalarQuadraticTerm{Float64}[],
+        [MOI.ScalarAffineTerm(1.1, x)],
         3.0,
     )
     return _test_nlexpr(
@@ -59,8 +59,8 @@ end
 function test_nlexpr_scalarquadratic_1a()
     x = MOI.VariableIndex(1)
     f = MOI.ScalarQuadraticFunction(
-        [MOI.ScalarAffineTerm(1.1, x)],
         [MOI.ScalarQuadraticTerm(2.0, x, x)],
+        [MOI.ScalarAffineTerm(1.1, x)],
         3.0,
     )
     terms = [NL.OPMULT, x, x]
@@ -70,8 +70,8 @@ end
 function test_nlexpr_scalarquadratic_1b()
     x = MOI.VariableIndex(1)
     f = MOI.ScalarQuadraticFunction(
-        [MOI.ScalarAffineTerm(1.1, x)],
         [MOI.ScalarQuadraticTerm(2.5, x, x)],
+        [MOI.ScalarAffineTerm(1.1, x)],
         3.0,
     )
     terms = [NL.OPMULT, 1.25, NL.OPMULT, x, x]
@@ -82,8 +82,8 @@ function test_nlexpr_scalarquadratic_1c()
     x = MOI.VariableIndex(1)
     y = MOI.VariableIndex(2)
     f = MOI.ScalarQuadraticFunction(
-        [MOI.ScalarAffineTerm(1.1, x)],
         [MOI.ScalarQuadraticTerm(1.0, x, y)],
+        [MOI.ScalarAffineTerm(1.1, x)],
         3.0,
     )
     terms = [NL.OPMULT, x, y]
@@ -94,11 +94,11 @@ function test_nlexpr_scalarquadratic_2()
     x = MOI.VariableIndex(1)
     y = MOI.VariableIndex(2)
     f = MOI.ScalarQuadraticFunction(
-        [MOI.ScalarAffineTerm(1.1, x)],
         [
             MOI.ScalarQuadraticTerm(2.0, x, x),
             MOI.ScalarQuadraticTerm(1.0, x, y),
         ],
+        [MOI.ScalarAffineTerm(1.1, x)],
         3.0,
     )
     terms = [NL.OPPLUS, NL.OPMULT, x, x, NL.OPMULT, x, y]
@@ -110,12 +110,12 @@ function test_nlexpr_scalarquadratic_3()
     y = MOI.VariableIndex(2)
     z = MOI.VariableIndex(3)
     f = MOI.ScalarQuadraticFunction(
-        [MOI.ScalarAffineTerm(1.1, x)],
         [
             MOI.ScalarQuadraticTerm(2.0, x, x),
             MOI.ScalarQuadraticTerm(0.5, x, y),
             MOI.ScalarQuadraticTerm(4.0, x, z),
         ],
+        [MOI.ScalarAffineTerm(1.1, x)],
         3.0,
     )
     terms = [
@@ -301,8 +301,8 @@ function test_nlmodel_hs071()
     l = [1.1, 1.2, 1.3, 1.4]
     u = [5.1, 5.2, 5.3, 5.4]
     start = [2.1, 2.2, 2.3, 2.4]
-    MOI.add_constraint.(model, MOI.SingleVariable.(v), MOI.GreaterThan.(l))
-    MOI.add_constraint.(model, MOI.SingleVariable.(v), MOI.LessThan.(u))
+    MOI.add_constraint.(model, v, MOI.GreaterThan.(l))
+    MOI.add_constraint.(model, v, MOI.LessThan.(u))
     MOI.set.(model, MOI.VariablePrimalStart(), v, start)
     lb, ub = [25.0, 40.0], [Inf, 40.0]
     evaluator = MOI.Test.HS071(true)
@@ -449,10 +449,10 @@ function test_nlmodel_hs071_linear_obj()
     l = [1.1, 1.2, 1.3, 1.4]
     u = [5.1, 5.2, 5.3, 5.4]
     start = [2.1, 2.2, 2.3, 2.4]
-    MOI.add_constraint.(model, MOI.SingleVariable.(v), MOI.GreaterThan.(l))
-    MOI.add_constraint.(model, MOI.SingleVariable.(v), MOI.LessThan.(u))
-    MOI.add_constraint(model, MOI.SingleVariable(v[2]), MOI.ZeroOne())
-    MOI.add_constraint(model, MOI.SingleVariable(v[3]), MOI.Integer())
+    MOI.add_constraint.(model, v, MOI.GreaterThan.(l))
+    MOI.add_constraint.(model, v, MOI.LessThan.(u))
+    MOI.add_constraint(model, v[2], MOI.ZeroOne())
+    MOI.add_constraint(model, v[3], MOI.Integer())
     MOI.set.(model, MOI.VariablePrimalStart(), v, start)
     lb, ub = [25.0, 40.0], [Inf, 40.0]
     evaluator = MOI.Test.HS071(true)
@@ -464,7 +464,10 @@ function test_nlmodel_hs071_linear_obj()
     n = NL.Model()
     @test MOI.supports(n, MOI.VariablePrimalStart(), MOI.VariableIndex)
     @test MOI.supports(n, MOI.ObjectiveFunction{typeof(f)}())
-    MOI.copy_to(n, model)
+    index_map = MOI.copy_to(n, model)
+    for (vi, starti) in zip(v, start)
+        @test MOI.get(n, MOI.VariablePrimalStart(), index_map[vi]) == starti
+    end
     @test n.sense == MOI.MAX_SENSE
     @test n.f == NL._NLExpr(f)
     _test_nlexpr(
@@ -593,19 +596,19 @@ end
 function test_nlmodel_linear_quadratic()
     model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}())
     x = MOI.add_variables(model, 4)
-    MOI.add_constraint.(model, MOI.SingleVariable.(x), MOI.GreaterThan(0.0))
-    MOI.add_constraint.(model, MOI.SingleVariable.(x), MOI.LessThan(2.0))
-    MOI.add_constraint(model, MOI.SingleVariable(x[2]), MOI.ZeroOne())
-    MOI.add_constraint(model, MOI.SingleVariable(x[3]), MOI.Integer())
+    MOI.add_constraint.(model, x, MOI.GreaterThan(0.0))
+    MOI.add_constraint.(model, x, MOI.LessThan(2.0))
+    MOI.add_constraint(model, x[2], MOI.ZeroOne())
+    MOI.add_constraint(model, x[3], MOI.Integer())
     f = MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(1.0, x[2:4]), 2.0)
     g = MOI.ScalarQuadraticFunction(
-        [MOI.ScalarAffineTerm(1.0, x[1])],
         [MOI.ScalarQuadraticTerm(2.0, x[1], x[2])],
+        [MOI.ScalarAffineTerm(1.0, x[1])],
         3.0,
     )
     h = MOI.ScalarQuadraticFunction(
-        [MOI.ScalarAffineTerm(1.0, x[3])],
         [MOI.ScalarQuadraticTerm(1.0, x[1], x[2])],
+        [MOI.ScalarAffineTerm(1.0, x[3])],
         0.0,
     )
     MOI.add_constraint(model, f, MOI.Interval(1.0, 10.0))
@@ -690,8 +693,8 @@ function test_nlmodel_quadratic_interval()
     model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}())
     x = MOI.add_variable(model)
     g = MOI.ScalarQuadraticFunction(
-        [MOI.ScalarAffineTerm(1.0, x)],
         [MOI.ScalarQuadraticTerm(2.0, x, x)],
+        [MOI.ScalarAffineTerm(1.0, x)],
         3.0,
     )
     MOI.add_constraint(model, g, MOI.Interval(1.0, 10.0))
@@ -731,7 +734,7 @@ end
 
 function test_eval_singlevariable()
     x = MOI.VariableIndex(1)
-    f = NL._NLExpr(MOI.SingleVariable(x))
+    f = NL._NLExpr(x)
     @test NL._evaluate(f, Dict(x => 1.2)) == 1.2
 end
 
@@ -744,8 +747,8 @@ end
 function test_eval_scalarquadratic()
     x = MOI.VariableIndex(1)
     f = MOI.ScalarQuadraticFunction(
-        [MOI.ScalarAffineTerm(1.1, x)],
         [MOI.ScalarQuadraticTerm(2.0, x, x)],
+        [MOI.ScalarAffineTerm(1.1, x)],
         3.0,
     )
     @test NL._evaluate(NL._NLExpr(f), Dict(x => 1.1)) == 5.42
@@ -812,10 +815,10 @@ function test_issue_79()
     model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}())
     x = MOI.add_variable(model)
     z = MOI.add_variable(model)
-    MOI.add_constraint(model, MOI.SingleVariable(z), MOI.ZeroOne())
+    MOI.add_constraint(model, z, MOI.ZeroOne())
     f = MOI.ScalarQuadraticFunction(
-        [MOI.ScalarAffineTerm(-1.0, z)],
         [MOI.ScalarQuadraticTerm(1.0, z, z)],
+        [MOI.ScalarAffineTerm(-1.0, z)],
         0.25,
     )
     MOI.set(model, MOI.ObjectiveFunction{typeof(f)}(), f)
@@ -823,8 +826,8 @@ function test_issue_79()
     MOI.add_constraint(
         model,
         MOI.ScalarQuadraticFunction(
-            MOI.ScalarAffineTerm{Float64}[],
             [MOI.ScalarQuadraticTerm(1.0, x, z)],
+            MOI.ScalarAffineTerm{Float64}[],
             0.0,
         ),
         MOI.LessThan(0.0),
@@ -894,10 +897,10 @@ function test_linear_constraint_types()
     model = MOI.Utilities.Model{Float64}()
     n = NL.Model()
     y = MOI.add_variables(model, 3)
-    MOI.add_constraint(model, MOI.SingleVariable(y[1]), MOI.ZeroOne())
-    MOI.add_constraint(model, MOI.SingleVariable(y[2]), MOI.Integer())
-    @test MOI.supports_constraint(n, MOI.SingleVariable, MOI.ZeroOne)
-    @test MOI.supports_constraint(n, MOI.SingleVariable, MOI.Integer)
+    MOI.add_constraint(model, y[1], MOI.ZeroOne())
+    MOI.add_constraint(model, y[2], MOI.Integer())
+    @test MOI.supports_constraint(n, MOI.VariableIndex, MOI.ZeroOne)
+    @test MOI.supports_constraint(n, MOI.VariableIndex, MOI.Integer)
     for set in [
         MOI.GreaterThan(0.0),
         MOI.LessThan(1.0),
@@ -905,13 +908,13 @@ function test_linear_constraint_types()
         MOI.Interval(3.0, 4.0),
     ]
         x = MOI.add_variable(model)
-        @test MOI.supports_constraint(n, MOI.SingleVariable, typeof(set))
+        @test MOI.supports_constraint(n, MOI.VariableIndex, typeof(set))
         @test MOI.supports_constraint(
             n,
             MOI.ScalarAffineFunction{Float64},
             typeof(set),
         )
-        MOI.add_constraint(model, MOI.SingleVariable(x), set)
+        MOI.add_constraint(model, x, set)
         MOI.add_constraint(
             model,
             MOI.ScalarAffineFunction([MOI.ScalarAffineTerm(1.0, x)], 0.0),
@@ -1000,6 +1003,23 @@ function test_empty()
     @test !MOI.is_empty(n)
     MOI.empty!(n)
     @test MOI.is_empty(n)
+end
+
+function test_moi()
+    MOI.Test.runtests(
+        NL.Model(),
+        MOI.Test.Config(exclude = Any[MOI.optimize!]),
+        include = ["test_model_copy_to_Unsupported"],
+    )
+    return
+end
+
+function test_float_rounding()
+    @test NL._str(1.0) == "1"
+    @test NL._str(1.2) == "1.2"
+    @test NL._str(1e50) == "1.0e50"
+    @test NL._str(-1e50) == "-1.0e50"
+    return
 end
 
 function runtests()

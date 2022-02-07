@@ -1,10 +1,21 @@
 module TestPrint
 
+using Test
+
 using MathOptInterface
 const MOI = MathOptInterface
 const MOIU = MOI.Utilities
 
-using Test
+function runtests()
+    for name in names(@__MODULE__; all = true)
+        if startswith("$(name)", "test_")
+            @testset "$(name)" begin
+                getfield(@__MODULE__, name)()
+            end
+        end
+    end
+    return
+end
 
 const LATEX = MIME("text/latex")
 const PLAIN = MIME("text/plain")
@@ -47,6 +58,31 @@ function test_numbers()
     @test MOIU._to_string(options, -1.2, "x"; is_first = false) == " - 1.2 x"
 end
 
+function test_complex_numbers()
+    x = 1.0 + 1.0im
+    options =
+        MOIU._PrintOptions(MIME("text/plain"); simplify_coefficients = true)
+    @test MOIU._to_string(options, x, "x"; is_first = true) == "(1.0 + 1.0im) x"
+    @test MOIU._to_string(options, x, "x"; is_first = false) ==
+          " + (1.0 + 1.0im) x"
+    @test MOIU._to_string(options, -x, "x"; is_first = true) ==
+          "(-1.0 - 1.0im) x"
+    @test MOIU._to_string(options, -x, "x"; is_first = false) ==
+          " + (-1.0 - 1.0im) x"
+    return
+end
+
+function test_rational_numbers()
+    x = 1 // 2
+    options =
+        MOIU._PrintOptions(MIME("text/plain"); simplify_coefficients = true)
+    @test MOIU._to_string(options, x, "x"; is_first = true) == "(1//2) x"
+    @test MOIU._to_string(options, x, "x"; is_first = false) == " + (1//2) x"
+    @test MOIU._to_string(options, -x, "x"; is_first = true) == "-(1//2) x"
+    @test MOIU._to_string(options, -x, "x"; is_first = false) == " - (1//2) x"
+    return
+end
+
 function test_variable()
     model = MOIU.Model{Float64}()
     x = MOI.add_variable(model)
@@ -56,15 +92,6 @@ function test_variable()
         @test MOIU._to_string(PLAIN, model, x) == name
         @test MOIU._to_string(LATEX, model, x) == latex_name
     end
-end
-
-function test_single_variable()
-    model = MOIU.Model{Float64}()
-    x = MOI.add_variable(model)
-    MOI.set(model, MOI.VariableName(), x, "x")
-    f = MOI.SingleVariable(x)
-    @test MOIU._to_string(PLAIN, model, f) == "x"
-    @test MOIU._to_string(LATEX, model, f) == "x"
 end
 
 function test_ScalarAffineTerm()
@@ -97,6 +124,16 @@ function test_ScalarAffineFunction()
     @test MOIU._to_string(LATEX, model, f) == "1.4 - 1.2 x + 1.3 x"
 end
 
+function test_ScalarAffineFunction_complex()
+    model = MOI.Utilities.UniversalFallback(MOIU.Model{Float64}())
+    x = MOI.add_variable(model)
+    MOI.set(model, MOI.VariableName(), x, "x")
+    f = (1.0 + 1.0im)x
+    s = MOI.EqualTo(1.0 + 1.0im)
+    @test MOIU._to_string(PLAIN, model, f) == "(0.0 + 0.0im) + (1.0 + 1.0im) x"
+    @test MOIU._to_string(LATEX, model, f) == "(0.0 + 0.0im) + (1.0 + 1.0im) x"
+end
+
 function test_ScalarQuadraticTerm()
     model = MOIU.Model{Float64}()
     x = MOI.add_variable(model)
@@ -119,8 +156,8 @@ function test_ScalarQuadraticFunction()
     MOI.set(model, MOI.VariableName(), x, "x")
     MOI.set(model, MOI.VariableName(), y, "y")
     f = MOI.ScalarQuadraticFunction(
-        MOI.ScalarAffineTerm.([-1.2, 1.3], [x, x]),
         MOI.ScalarQuadraticTerm.([0.5, 0.6], [x, x], [x, y]),
+        MOI.ScalarAffineTerm.([-1.2, 1.3], [x, x]),
         1.4,
     )
     @test MOIU._to_string(PLAIN, model, f) ==
@@ -162,7 +199,7 @@ end
 function test_Interval()
     s = MOI.Interval(1.2, 1.3)
     @test MOIU._to_string(PLAIN, s) == "$(IN) [1.2, 1.3]"
-    @test MOIU._to_string(LATEX, s) == "\\in \\[1.2, 1.3\\]"
+    @test MOIU._to_string(LATEX, s) == "\\in [1.2, 1.3]"
 end
 
 function test_ZeroOne()
@@ -201,7 +238,7 @@ function test_min()
     model = MOIU.Model{Float64}()
     MOIU.loadfromstring!(model, "variables: x\nminobjective: x")
     @test sprint(print, model) == """
-    Minimize SingleVariable:
+    Minimize VariableIndex:
      x
 
     Subject to:
@@ -221,7 +258,7 @@ function test_max()
     model = MOIU.Model{Float64}()
     MOIU.loadfromstring!(model, "variables: x\nmaxobjective: x")
     @test sprint(print, model) == """
-    Maximize SingleVariable:
+    Maximize VariableIndex:
      x
 
     Subject to:
@@ -301,13 +338,13 @@ function test_model()
      │0.0 + 1.0 y │
      └            ┘ $(IN) ExponentialCone()
 
-    SingleVariable-in-GreaterThan{Float64}
+    VariableIndex-in-GreaterThan{Float64}
      x >= 0.1
 
-    SingleVariable-in-Integer
+    VariableIndex-in-Integer
      z $(IN) ℤ
 
-    SingleVariable-in-ZeroOne
+    VariableIndex-in-ZeroOne
      x $(IN) {0, 1}
      y $(IN) {0, 1}
     """
@@ -347,7 +384,7 @@ function test_latex()
          & \text{ScalarAffineFunction{Float64}-in-GreaterThan{Float64}} \\
          & 0.0 + 2.0 x \ge 1.0 \\
          & \text{ScalarAffineFunction{Float64}-in-Interval{Float64}} \\
-         & 0.0 + 2.0 x \in \[1.0, 2.0\] \\
+         & 0.0 + 2.0 x \in [1.0, 2.0] \\
          & \text{ScalarQuadraticFunction{Float64}-in-LessThan{Float64}} \\
          & 0.0 + 1.0 y - 1.0 z + 2.0 x^2 \le 1.0 \\
          & \text{VectorOfVariables-in-SecondOrderCone} \\
@@ -368,11 +405,11 @@ function test_latex()
         1.0\\
         0.0 + 1.0 x^2\\
         0.0 + 1.0 y\end{bmatrix} \in \text{ExponentialCone()} \\
-         & \text{SingleVariable-in-GreaterThan{Float64}} \\
+         & \text{VariableIndex-in-GreaterThan{Float64}} \\
          & x \ge 0.1 \\
-         & \text{SingleVariable-in-Integer} \\
+         & \text{VariableIndex-in-Integer} \\
          & z \in \mathbb{Z} \\
-         & \text{SingleVariable-in-ZeroOne} \\
+         & \text{VariableIndex-in-ZeroOne} \\
          & x \in \{0, 1\} \\
          & y \in \{0, 1\} \\
         \end{aligned} $$""",
@@ -420,7 +457,7 @@ function test_latex_simplified()
         \text{Subject to}\\
          & x - y = 0 \\
          & 2 x \ge 1 \\
-         & 2 x \in \[1, 2\] \\
+         & 2 x \in [1, 2] \\
          & y - z + 2 x^2 \le 1 \\
          & \begin{bmatrix}
         x\\
@@ -517,8 +554,8 @@ function test_nlp()
     v = MOI.add_variables(model, 4)
     l = [1.1, 1.2, 1.3, 1.4]
     u = [5.1, 5.2, 5.3, 5.4]
-    MOI.add_constraint.(model, MOI.SingleVariable.(v), MOI.GreaterThan.(l))
-    MOI.add_constraint.(model, MOI.SingleVariable.(v), MOI.LessThan.(u))
+    MOI.add_constraint.(model, v, MOI.GreaterThan.(l))
+    MOI.add_constraint.(model, v, MOI.LessThan.(u))
     for i in 1:4
         MOI.set(model, MOI.VariableName(), v[i], "x[$i]")
     end
@@ -533,13 +570,13 @@ function test_nlp()
 
     Subject to:
 
-    SingleVariable-in-GreaterThan{Float64}
+    VariableIndex-in-GreaterThan{Float64}
      x[1] >= 1.1
      x[2] >= 1.2
      x[3] >= 1.3
      x[4] >= 1.4
 
-    SingleVariable-in-LessThan{Float64}
+    VariableIndex-in-LessThan{Float64}
      x[1] <= 5.1
      x[2] <= 5.2
      x[3] <= 5.3
@@ -555,12 +592,12 @@ function test_nlp()
         $$ \begin{aligned}
         \min\quad & x_{1} \times x_{4} \times (x_{1} + x_{2} + x_{3}) + x_{3} \\
         \text{Subject to}\\
-         & \text{SingleVariable-in-GreaterThan{Float64}} \\
+         & \text{VariableIndex-in-GreaterThan{Float64}} \\
          & x_{1} \ge 1.1 \\
          & x_{2} \ge 1.2 \\
          & x_{3} \ge 1.3 \\
          & x_{4} \ge 1.4 \\
-         & \text{SingleVariable-in-LessThan{Float64}} \\
+         & \text{VariableIndex-in-LessThan{Float64}} \\
          & x_{1} \le 5.1 \\
          & x_{2} \le 5.2 \\
          & x_{3} \le 5.3 \\
@@ -573,14 +610,64 @@ function test_nlp()
     return
 end
 
-function runtests()
-    for name in names(@__MODULE__; all = true)
-        if startswith("$(name)", "test_")
-            @testset "$(name)" begin
-                getfield(@__MODULE__, name)()
-            end
-        end
+function test_nlp_no_objective()
+    model = MOI.Utilities.UniversalFallback(MOI.Utilities.Model{Float64}())
+    v = MOI.add_variables(model, 4)
+    for i in 1:4
+        MOI.set(model, MOI.VariableName(), v[i], "x[$i]")
     end
+    lb, ub = [25.0, 40.0], [Inf, 40.0]
+    evaluator = MOI.Test.HS071(true)
+    block_data = MOI.NLPBlockData(MOI.NLPBoundsPair.(lb, ub), evaluator, false)
+    MOI.set(model, MOI.NLPBlock(), block_data)
+    MOI.set(model, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+    MOI.set(model, MOI.ObjectiveFunction{MOI.VariableIndex}(), v[1])
+    @test sprint(print, model) == """
+    Minimize VariableIndex:
+     x[1]
+
+    Subject to:
+
+    Nonlinear
+     x[1] * x[2] * x[3] * x[4] >= 25.0
+     x[1] ^ 2 + x[2] ^ 2 + x[3] ^ 2 + x[4] ^ 2 == 40.0
+    """
+    _string_compare(
+        sprint(print, MOIU.latex_formulation(model)),
+        raw"""
+        $$ \begin{aligned}
+        \min\quad & x_{1} \\
+        \text{Subject to}\\
+         & \text{Nonlinear} \\
+         & x_{1} \times x_{2} \times x_{3} \times x_{4} \ge 25.0 \\
+         & x_{1} ^ 2 + x_{2} ^ 2 + x_{3} ^ 2 + x_{4} ^ 2 = 40.0 \\
+        \end{aligned} $$""",
+    )
+    return
+end
+
+function test_print_with_acronym()
+    @test sprint(MOIU.print_with_acronym, "MathOptInterface") == "MOI"
+    @test sprint(
+        MOIU.print_with_acronym,
+        "MathOptInterface.MathOptInterface",
+    ) == "MOI.MOI"
+    @test sprint(
+        MOIU.print_with_acronym,
+        "MathOptInterface.Utilities.MathOptInterface",
+    ) == "MOIU.MOI"
+    @test sprint(MOIU.print_with_acronym, "MathOptInterfaceXXBridges") ==
+          "MOIXXBridges"
+    @test sprint(MOIU.print_with_acronym, "MathOptInterface.BridgesXX") ==
+          "MOIBXX"
+    @test sprint(MOIU.print_with_acronym, "MathOptInterface.Test.x") == "MOIT.x"
+    @test sprint(MOIU.print_with_acronym, "MathOptInterface.x.Test") ==
+          "MOI.x.Test"
+    @test sprint(MOIU.print_with_acronym, "MathOptInterface.Utilities.Test") ==
+          "MOIU.Test"
+    @test sprint(MOIU.print_with_acronym, "MathOptInterface.Utilities.Test") ==
+          "MOIU.Test"
+    return
 end
 
 end

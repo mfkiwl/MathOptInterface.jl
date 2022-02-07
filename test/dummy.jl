@@ -5,14 +5,15 @@ const MOIU = MOI.Utilities
 abstract type AbstractDummyModel <: MOI.ModelLike end
 
 function MOI.empty!(::AbstractDummyModel) end
-function MOI.copy_to(
-    dest::AbstractDummyModel,
-    src::MOI.ModelLike;
-    copy_names = true,
-)
-    return MOIU.default_copy_to(dest, src, copy_names)
+
+function MOI.copy_to(dest::AbstractDummyModel, src::MOI.ModelLike)
+    return MOIU.default_copy_to(dest, src)
 end
+
+MOI.supports_incremental_interface(::AbstractDummyModel) = true
+
 MOI.supports(::AbstractDummyModel, ::MOI.ObjectiveSense) = true
+
 function MOI.supports(
     ::AbstractDummyModel,
     ::MOI.ConstraintPrimalStart,
@@ -22,7 +23,7 @@ function MOI.supports(
 end
 function MOI.supports_constraint(
     ::AbstractDummyModel,
-    ::Type{MOI.SingleVariable},
+    ::Type{MOI.VariableIndex},
     ::Type{MOI.EqualTo{Float64}},
 )
     return true
@@ -43,8 +44,8 @@ MOI.add_variable(::DummyModelWithAdd) = MOI.VariableIndex(0)
 MOI.add_variables(::DummyModelWithAdd, n) = fill(MOI.VariableIndex(0), n)
 function MOI.add_constraint(
     ::DummyModelWithAdd,
-    ::MOI.SingleVariable,
+    ::MOI.VariableIndex,
     ::MOI.EqualTo{Float64},
 )
-    return MOI.ConstraintIndex{MOI.SingleVariable,MOI.EqualTo{Float64}}(0)
+    return MOI.ConstraintIndex{MOI.VariableIndex,MOI.EqualTo{Float64}}(0)
 end
